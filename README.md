@@ -38,6 +38,7 @@ Access from outside your network goes through a Cloudflare Tunnel with Cloudflar
 
 **Navigate**
 - Go to box on `/` or Ctrl-K: machines, drives, pinned and recent folders, or a literal `machine:/path`.
+- Filename search across every drive of every machine, streamed as agents answer, breadth-first so shallow hits arrive first. A hit opens its folder with the file selected.
 - Breadcrumb chips, an editable location line, and a pin button on any folder.
 - A drive switcher that works from any page, and a sidebar you can collapse.
 
@@ -45,6 +46,7 @@ Access from outside your network goes through a Cloudflare Tunnel with Cloudflar
 - Drag-and-drop or button upload, chunked and resumable, sized to pass through Cloudflare's request limit.
 - A transfer tray at the bottom of the app with rate, bytes left and per-file progress that survives navigation.
 - Rename, new folder, multi-select with Shift and Ctrl, and delete that moves to a per-drive trash instead of unlinking.
+- Zip download of any folder or multi-selection, streamed straight from the agent with already-compressed formats stored rather than re-deflated.
 
 **Fleet**
 - The landing page is a rack: one capacity bar for the whole fleet, each machine as a unit with its drives as sleds, LEDs for status, and empty slots for machines without an agent.
@@ -55,6 +57,7 @@ Access from outside your network goes through a Cloudflare Tunnel with Cloudflar
 - Streams everything. Directory listings paint as they arrive; file reads use `sendfile` with range support so video seeks are instant.
 - Phone layout with a drawer, a bottom sheet for details, and 44 px touch rows. Keyboard navigation and visible focus everywhere. Respects reduced motion.
 - A colour system with every text and icon pair checked against WCAG floors by a script in the repo.
+- An audit log on the hub: one JSON line per API request with user, machine, path, status, bytes and duration.
 
 ## Screenshots
 
@@ -91,8 +94,8 @@ Two static binaries from one Go module. The hub embeds the built React app. Addi
 
 | Component | Does |
 |---|---|
-| `rfs-agent` | Enumerates mounts, serves list, stat, ranged read, chunked upload, rename, trash, thumbnails. Authorises callers with Tailscale `whois`. Flags: `-readonly`, `-mounts /a:Label,/b:Other`, `-port`. |
-| `rfs-hub` | Serves the SPA, validates Cloudflare Access tokens, polls the tailnet for agents, reverse-proxies file calls with keep-alive and streaming. Flags: `-addr`, `-agent-port`, `-dev-email` (loopback only), `-demo-fleet`. |
+| `rfs-agent` | Enumerates mounts, serves list, stat, ranged read, chunked upload, rename, trash, thumbnails, zip, filename search. Authorises callers with Tailscale `whois`. Flags: `-readonly`, `-mounts /a:Label,/b:Other`, `-port`. |
+| `rfs-hub` | Serves the SPA, validates Cloudflare Access tokens, polls the tailnet for agents, reverse-proxies file calls with keep-alive and streaming, fans search out to every drive, writes the audit log. Flags: `-addr`, `-agent-port`, `-audit` (or `RFS_AUDIT_LOG`), `-dev-email` (loopback only), `-demo-fleet`. |
 
 ## Quick start
 
@@ -157,11 +160,10 @@ The palette lives in `web/src/palette.json`. Apply it with `node scripts/apply-p
 
 ## Roadmap
 
-- Filename search across machines, fanned out to each agent's index
-- Zip download of folders
-- Audit log to a file on the hub
+- Indexed search with change notifications, for drives too large to walk within the time budget
 - Tailnet-direct fast path that skips Cloudflare when the browser is already on the tailnet
 - Remux for MKV and HEVC in the browser
+- Passkey step-up before destructive actions
 
 The original plan with decisions and phase checks is in [PLAN.md](PLAN.md).
 

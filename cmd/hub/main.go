@@ -22,7 +22,12 @@ func main() {
 	agentPort := flag.String("agent-port", "7421", "port agents listen on")
 	devEmail := flag.String("dev-email", "", "DEV ONLY: skip Cloudflare Access and act as this email (loopback bind required)")
 	demoFleet := flag.String("demo-fleet", "", "DEMO: serve this JSON fleet instead of discovering the tailnet")
+	auditPath := flag.String("audit", os.Getenv("RFS_AUDIT_LOG"), "append one JSON line per API request to this file (default: stderr)")
 	flag.Parse()
+	audit, err := hub.OpenAudit(*auditPath)
+	if err != nil {
+		log.Fatalf("audit log: %v", err)
+	}
 	var auth func(http.Handler) http.Handler
 	if *devEmail != "" {
 		if !strings.HasPrefix(*addr, "127.0.0.1:") && !strings.HasPrefix(*addr, "localhost:") {
@@ -61,12 +66,13 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(reg.List())
 	})
+	api.Handle("GET /api/search", hub.Search(reg, *agentPort))
 	api.Handle("/api/m/{name}/{rest...}", hub.Proxy(reg, *agentPort))
 	api.Handle("/", spa())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, "ok") })
-	mux.Handle("/", auth(logged(api)))
+	mux.Handle("/", auth(audit.Wrap(api)))
 	log.Printf("rfs-hub listening on %s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, mux))
 }
@@ -89,14 +95,5 @@ func spa() http.Handler {
 		}
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFileFS(w, r, dist, "index.html")
-	})
-}
-
-func logged(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") {
-			log.Printf("%s %s %s", hub.Email(r), r.Method, r.URL.RequestURI())
-		}
-		next.ServeHTTP(w, r)
 	})
 }

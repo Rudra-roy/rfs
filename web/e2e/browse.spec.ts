@@ -131,6 +131,39 @@ test('multi-select and quick look', async ({ page }) => {
   await expect(ql).toHaveCount(0)
 })
 
+test('zip download and cross-machine search', async ({ page }) => {
+  await page.goto(`/m/${machine}${dir}`)
+  // zip of a multi-selection
+  await page.getByRole('option', { name: /^hello\.txt\s/ }).click()
+  await page.getByRole('option', { name: /^notes\.md\s/ }).click({ modifiers: ['ControlOrMeta'] })
+  const href = await page.getByRole('link', { name: 'Download zip' }).getAttribute('href')
+  const zip = await page.request.get(href!)
+  expect(zip.headers()['content-type']).toBe('application/zip')
+  const body = await zip.body()
+  expect(body.subarray(0, 2).toString()).toBe('PK')
+  expect(body.includes(Buffer.from('hello.txt'))).toBe(true)
+  expect(body.includes(Buffer.from('notes.md'))).toBe(true)
+  expect(body.includes(Buffer.from('dot.png'))).toBe(false)
+  // folder zip from the toolbar (shown when nothing is selected)
+  await page.getByRole('button', { name: 'Clear' }).click()
+  const folderZip = await page.request.get((await page.getByRole('link', { name: 'Download folder as zip' }).getAttribute('href'))!)
+  expect(folderZip.headers()['content-disposition']).toContain(dir.split('/').pop()! + '.zip')
+
+  // search from the Go to box lands on the file, selected
+  const needle = 'rfs-e2e'
+  await page.keyboard.press('Escape')
+  await page.keyboard.press('/')
+  await expect(page.getByLabel('Go to')).toBeFocused()
+  await page.keyboard.type(needle)
+  await page.getByRole('option', { name: /Search files for/ }).click()
+  await expect(page).toHaveURL(/\/search\?q=rfs-e2e/)
+  await expect(page.getByText(/Results for/)).toBeVisible()
+  const hit = page.getByRole('list').getByRole('button', { name: new RegExp('^' + esc(dir.split('/').pop()!)) }).first()
+  await expect(hit).toBeVisible({ timeout: 15000 })
+  await hit.click()
+  await expect(page).toHaveURL(`/m/${machine}${dir}`)
+})
+
 test('grid view shows thumbnails', async ({ page }) => {
   await page.goto(`/m/${machine}${dir}`)
   await page.getByRole('button', { name: 'Grid view' }).click()

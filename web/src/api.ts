@@ -20,6 +20,34 @@ const base = (m: string) => `/api/m/${encodeURIComponent(m)}/v1`
 export const fileURL = (m: string, path: string, dl = false) =>
   `${base(m)}/file?${q(dl ? { path, dl: '1' } : { path })}`
 
+// zip of a folder, or of named entries inside it
+export const zipURL = (m: string, dir: string, names: string[] = []) =>
+  `${base(m)}/zip?` + new URLSearchParams([['path', dir], ...names.map(n => ['name', n] as [string, string])]).toString()
+
+export type Hit = { machine: string; p: string; n: string; d?: boolean; s: number; m: number }
+export type Coverage = { machine: string; root: string; done: boolean; error?: string }
+
+// Streams merged search hits from every agent; onBatch gets growing arrays.
+export async function search(q: string, signal: AbortSignal, onBatch: (hits: Hit[], cov: Coverage[]) => void) {
+  const r = await fetch(`/api/search?${new URLSearchParams({ q })}`, { signal }).then(check)
+  const reader = r.body!.getReader(), dec = new TextDecoder()
+  const hits: Hit[] = [], cov: Coverage[] = []
+  let buf = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    buf += dec.decode(value, { stream: !done })
+    const lines = buf.split('\n')
+    buf = done ? '' : lines.pop()!
+    for (const l of lines) {
+      if (!l) continue
+      const o = JSON.parse(l)
+      if ('done' in o) cov.push(o); else hits.push(o)
+    }
+    onBatch(hits.slice(), cov.slice())
+    if (done) return
+  }
+}
+
 // mtime in the URL makes the immutable cache header safe
 export const thumbURL = (m: string, path: string, mtime: number) =>
   `${base(m)}/thumb?${q({ path, v: String(mtime) })}`

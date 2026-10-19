@@ -56,6 +56,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("HEAD /v1/file", s.handleGet)
 	mux.HandleFunc("PUT /v1/file", s.handlePut)
 	mux.HandleFunc("GET /v1/thumb", s.handleThumb)
+	mux.HandleFunc("GET /v1/zip", s.handleZip)
+	mux.HandleFunc("GET /v1/search", s.handleSearch)
 	mux.HandleFunc("POST /v1/mkdir", s.handleMkdir)
 	mux.HandleFunc("POST /v1/mv", s.handleMv)
 	mux.HandleFunc("POST /v1/rm", s.handleRm)

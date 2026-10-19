@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowDown, ArrowUp, ChevronDown, Download, File, FileArchive, FileCode2, FileText, Film, Folder, FolderPlus, FolderOpen, Image as ImageIcon, Music, Upload } from 'lucide-react'
-import { fileURL, ls, mkdir, thumbURL, type Entry } from '../api'
+import { ArrowDown, ArrowUp, ChevronDown, Download, FolderArchive, File, FileArchive, FileCode2, FileText, Film, Folder, FolderPlus, FolderOpen, Image as ImageIcon, Music, Upload } from 'lucide-react'
+import { fileURL, ls, mkdir, thumbURL, zipURL, type Entry } from '../api'
 import { bytes, when, kind, kindColor, type Kind } from '../format'
 import { navigate, join } from '../route'
 import { Button, Empty, Menu, MenuItem, Skeleton, TextInput, cx } from './ui'
@@ -53,6 +53,7 @@ export function Toolbar({ machine, path, sorted, sort, onSort, selected, onUploa
   const visible = sorted
   const size = visible.reduce((a, e) => a + (e.d ? 0 : e.s), 0)
   const single = selected.length === 1 && !selected[0].d ? selected[0] : null
+  const zipHref = selected.length > 0 && !single ? zipURL(machine, path, selected.map(e => e.n)) : null
   const [mk, setMk] = useState(false)
   const [name, setName] = useState('')
   const [err, setErr] = useState<string>()
@@ -80,6 +81,9 @@ export function Toolbar({ machine, path, sorted, sort, onSort, selected, onUploa
             {single && <a href={fileURL(machine, join(path, single.n), true)} download className="press inline-flex items-center gap-2 h-8 px-2.5 rounded-sm bg-accent text-accent-fg font-medium text-[13px] hover:bg-accent/90">
               <Download className="size-4" aria-hidden /> Download
             </a>}
+            {zipHref && <a href={zipHref} download className="press inline-flex items-center gap-2 h-8 px-2.5 rounded-sm bg-accent text-accent-fg font-medium text-[13px] hover:bg-accent/90">
+              <FolderArchive className="size-4" aria-hidden /> Download zip
+            </a>}
             <Button size="sm" variant="ghost" onClick={onClear}>Clear</Button>
           </>
         ) : mk ? (
@@ -94,6 +98,8 @@ export function Toolbar({ machine, path, sorted, sort, onSort, selected, onUploa
             <Button size="sm" icon={<Upload />} onClick={() => input.current?.click()}>Upload</Button>
             <input ref={input} type="file" multiple hidden onChange={e => { onUpload(e.target.files); e.target.value = '' }} />
             <Button size="sm" icon={<FolderPlus />} onClick={() => setMk(true)}><span className="hidden sm:inline">New folder</span><span className="sm:hidden">Folder</span></Button>
+            <a href={zipURL(machine, path)} download aria-label="Download folder as zip" title="Download folder as zip"
+              className="press hidden sm:grid place-items-center size-8 rounded-sm text-muted hover:text-fg hover:bg-surface-2"><FolderArchive className="size-4" /></a>
           </>
         )}
       </div>

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Clock, HardDrive, Pin, Search, Terminal } from 'lucide-react'
+import { Clock, FileSearch, HardDrive, Pin, Search, Terminal } from 'lucide-react'
 import type { Machine } from '../api'
 import { hueOf } from '../format'
-import { navigate, tail } from '../route'
+import { navigate, navigateSearch, tail } from '../route'
 import { useLocs } from '../prefs'
 import { MachineMark, cx } from './ui'
 
-type Item = { key: string; icon: 'drive' | 'pin' | 'recent' | 'literal'; label: string; sub: string; machine: string; path: string }
+type Item = { key: string; icon: 'drive' | 'pin' | 'recent' | 'literal' | 'search'; label: string; sub: string; machine: string; path: string }
 
 // Client-side jump box: machines, drives, pinned and recent folders, or a literal machine:/path.
 // Focus it from anywhere with Ctrl/Cmd-K or '/'.
@@ -39,16 +39,20 @@ export function GoTo({ machines, onPick, autoFocus }: { machines: Machine[]; onP
       const m = live.find(x => x.name === lit[1].toLowerCase()) ?? live.find(x => x.name.startsWith(lit[1].toLowerCase()))
       if (m) hits.unshift({ key: 'lit', icon: 'literal', label: lit[2], sub: `open on ${m.name}`, machine: m.name, path: lit[2] })
     }
-    return hits.slice(0, 8)
+    const out = hits.slice(0, 7)
+    if (needle.length >= 2 && !lit) out.push({ key: 'search', icon: 'search', label: `Search files for “${q.trim()}”`, sub: 'every drive, every machine', machine: '', path: q.trim() })
+    return out
   }, [q, recent, pinned, live])
 
   useEffect(() => setIdx(0), [q])
 
   function go(i: Item) {
+    setQ(''); setOpen(false); input.current?.blur(); onPick?.()
+    if (i.icon === 'search') return navigateSearch(i.path)
     const p = i.path.length > 1 && /[\\/]$/.test(i.path) ? i.path.slice(0, -1) : i.path
-    setQ(''); setOpen(false); input.current?.blur(); onPick?.(); navigate(i.machine, p)
+    navigate(i.machine, p)
   }
-  const Ico = ({ k }: { k: Item['icon'] }) => k === 'pin' ? <Pin className="size-3.5" /> : k === 'recent' ? <Clock className="size-3.5" /> : k === 'literal' ? <Terminal className="size-3.5" /> : <HardDrive className="size-3.5" />
+  const Ico = ({ k }: { k: Item['icon'] }) => k === 'pin' ? <Pin className="size-3.5" /> : k === 'recent' ? <Clock className="size-3.5" /> : k === 'literal' ? <Terminal className="size-3.5" /> : k === 'search' ? <FileSearch className="size-3.5" /> : <HardDrive className="size-3.5" />
 
   return (
     <div className="relative">
@@ -71,7 +75,7 @@ export function GoTo({ machines, onPick, autoFocus }: { machines: Machine[]; onP
             <li key={i.key} role="option" aria-selected={n === idx} onMouseDown={e => { e.preventDefault(); go(i) }} onMouseEnter={() => setIdx(n)}
               className={cx('flex items-center gap-2.5 h-9 px-2 rounded-sm cursor-default text-[13px]', n === idx ? 'bg-accent-dim' : '')}>
               <span className="text-muted"><Ico k={i.icon} /></span>
-              <MachineMark name={i.machine} hue={hueOf(i.machine)} size="sm" />
+              {i.machine && <MachineMark name={i.machine} hue={hueOf(i.machine)} size="sm" />}
               <span className="truncate">{i.label}</span>
               <span className="ml-auto truncate text-faint font-mono text-[11px] max-w-[55%]">{i.sub}</span>
             </li>

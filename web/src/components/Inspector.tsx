@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Download, Pencil, Pin, Trash2 } from 'lucide-react'
-import { fileURL, mv, rm, type Entry } from '../api'
+import { fileURL, mv, rm, zipURL, type Entry } from '../api'
 import { bytes, when } from '../format'
 import { join } from '../route'
 import { isPinned, togglePin, useLocs } from '../prefs'
@@ -59,9 +59,9 @@ function EntryView({ machine, path, entry, onChanged, onClose }: Props & { entry
       </div>
       {mode === 'view' && (
         <div className="flex flex-wrap gap-2">
-          {!entry.d && <a href={fileURL(machine, full, true)} download className="press inline-flex items-center gap-2 h-9 px-3 rounded-sm bg-accent text-accent-fg font-medium text-[14px] hover:bg-accent/90">
-            <Download className="size-4" aria-hidden /> Download
-          </a>}
+          <a href={entry.d ? zipURL(machine, full) : fileURL(machine, full, true)} download className="press inline-flex items-center gap-2 h-9 px-3 rounded-sm bg-accent text-accent-fg font-medium text-[14px] hover:bg-accent/90">
+            <Download className="size-4" aria-hidden /> {entry.d ? 'Download zip' : 'Download'}
+          </a>
           <Button icon={<Pencil />} onClick={() => setMode('rename')}>Rename</Button>
           <Button variant="danger" icon={<Trash2 />} onClick={() => setMode('confirm')}>Delete</Button>
         </div>
@@ -115,7 +115,10 @@ function FolderView({ machine, path, count }: Props) {
     <>
       <Title mono>{path}</Title>
       <Row k="Items" v={String(count)} />
-      <div><Button icon={<Pin />} variant={pinned ? 'solid' : 'outline'} onClick={() => togglePin(machine, path)}>{pinned ? 'Pinned' : 'Pin folder'}</Button></div>
+      <div className="flex flex-wrap gap-2">
+        <Button icon={<Pin />} variant={pinned ? 'solid' : 'outline'} onClick={() => togglePin(machine, path)}>{pinned ? 'Pinned' : 'Pin folder'}</Button>
+        <a href={zipURL(machine, path)} download className="press inline-flex items-center gap-2 h-9 px-3 rounded-sm border border-line-strong bg-surface hover:bg-surface-2 text-[14px] font-medium"><Download className="size-4" aria-hidden /> Download zip</a>
+      </div>
       <p className="text-[13px] text-muted">Select a file to preview it. Space opens Quick Look.</p>
     </>
   )

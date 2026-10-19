@@ -6,6 +6,7 @@ import { useMedia, usePref } from './prefs'
 import { TopBar, type View } from './components/TopBar'
 import { Nav } from './components/Sidebar'
 import { Landing } from './components/Landing'
+import { SearchView } from './components/SearchView'
 import { Listing, Toolbar, sortEntries, useListing, type Selection, type Sort } from './components/Listing'
 import { Inspector } from './components/Inspector'
 import { QuickLook } from './components/QuickLook'
@@ -44,7 +45,9 @@ export default function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !inField(e.target))) {
-        e.preventDefault(); if (!wide) setDrawer(true); setTimeout(() => dispatchEvent(new Event('rfs:goto')), 30)
+        e.preventDefault()
+        if (wide) dispatchEvent(new Event('rfs:goto'))
+        else { setDrawer(true); setTimeout(() => dispatchEvent(new Event('rfs:goto')), 30) } // the drawer has to mount first
       } else if (!inField(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
         if (e.key === 'i') setDetails(!details)
         else if (e.key === '1') setView('list')
@@ -69,8 +72,10 @@ export default function App() {
         )}
         <main className="vt-main flex-1 min-w-0 min-h-0 flex">
           {route.machine
-            ? <Browser key={route.machine + route.path} machine={route.machine} path={route.path} hidden={hidden} view={view} offline={cur ? !cur.agent : false} wide={wide} details={details} onDetails={setDetails} />
-            : <div className="flex-1 overflow-auto"><Landing machines={list} error={error} /></div>}
+            ? <Browser key={route.machine + route.path} machine={route.machine} path={route.path} preselect={route.select} hidden={hidden} view={view} offline={cur ? !cur.agent : false} wide={wide} details={details} onDetails={setDetails} />
+            : 'q' in route && route.q !== undefined
+              ? <SearchView key={route.q} q={route.q} />
+              : <div className="flex-1 overflow-auto"><Landing machines={list} error={error} /></div>}
         </main>
       </div>
       <Tray />
@@ -83,15 +88,15 @@ export default function App() {
   )
 }
 
-type BrowserProps = { machine: string; path: string; hidden: boolean; view: View; offline: boolean; wide: boolean; details: boolean; onDetails: (v: boolean) => void }
+type BrowserProps = { machine: string; path: string; preselect?: string; hidden: boolean; view: View; offline: boolean; wide: boolean; details: boolean; onDetails: (v: boolean) => void }
 
-function Browser({ machine, path, hidden, view, offline, wide, details, onDetails }: BrowserProps) {
+function Browser({ machine, path, preselect, hidden, view, offline, wide, details, onDetails }: BrowserProps) {
   const [nonce, setNonce] = useState(0)
   const refresh = useCallback(() => setNonce(n => n + 1), [])
   const { rows, loading, error } = useListing(machine, path, nonce)
   const [sort, setSort] = usePref<Sort>('sort', { key: 'name', dir: 'asc' })
   const sorted = useMemo(() => sortEntries(rows, hidden, sort), [rows, hidden, sort])
-  const [selection, setSelection] = useState<Selection>({ names: new Set(), focus: null })
+  const [selection, setSelection] = useState<Selection>(() => ({ names: new Set(preselect ? [preselect] : []), focus: preselect ?? null }))
   const selected = useMemo(() => sorted.filter(e => selection.names.has(e.n)), [sorted, selection])
   const [sheet, setSheet] = useState(false)
   const [ql, setQl] = useState<number | null>(null)

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"archive/zip"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -99,6 +100,60 @@ func TestParseMounts(t *testing.T) {
 	}
 	if _, err := ParseMounts(dir + "/missing"); err == nil {
 		t.Fatal("missing dir accepted")
+	}
+}
+
+func TestZip(t *testing.T) {
+	dir, srv := newTest(t)
+	os.WriteFile(filepath.Join(dir, "sub", "deep.txt"), []byte("deep"), 0o644)
+	resp, body := do(t, "GET", srv.URL+"/v1/zip?path="+dir, "")
+	if resp.StatusCode != 200 || !strings.Contains(resp.Header.Get("Content-Disposition"), ".zip") {
+		t.Fatalf("zip: %d %q", resp.StatusCode, resp.Header.Get("Content-Disposition"))
+	}
+	zr, err := zip.NewReader(strings.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		got[f.Name] = string(b)
+	}
+	if got["hello.txt"] != "0123456789abcdefghij" || got["sub/deep.txt"] != "deep" {
+		t.Fatalf("zip contents: %v", got)
+	}
+	// subset by name
+	_, body = do(t, "GET", srv.URL+"/v1/zip?path="+dir+"&name=hello.txt", "")
+	zr, _ = zip.NewReader(strings.NewReader(body), int64(len(body)))
+	if len(zr.File) != 1 || zr.File[0].Name != "hello.txt" {
+		t.Fatalf("subset: %v", zr.File)
+	}
+	if r, _ := do(t, "GET", srv.URL+"/v1/zip?path="+dir+"&name=../etc", ""); r.StatusCode != 400 {
+		t.Fatalf("bad name accepted: %d", r.StatusCode)
+	}
+	if r, _ := do(t, "GET", srv.URL+"/v1/zip?path="+dir+"/hello.txt", ""); r.StatusCode != 400 {
+		t.Fatalf("zip of file accepted: %d", r.StatusCode)
+	}
+}
+
+func TestSearch(t *testing.T) {
+	dir, srv := newTest(t)
+	os.WriteFile(filepath.Join(dir, "sub", "Hello-World.md"), []byte("x"), 0o644)
+	_, body := do(t, "GET", srv.URL+"/v1/search?path="+dir+"&q=hello", "")
+	if !strings.Contains(body, `"n":"hello.txt"`) || !strings.Contains(body, `"n":"Hello-World.md"`) || !strings.Contains(body, `"done":true`) {
+		t.Fatalf("search: %s", body)
+	}
+	if strings.Contains(body, `"n":"sub"`) {
+		t.Fatalf("non-matching dir returned: %s", body)
+	}
+	_, body = do(t, "GET", srv.URL+"/v1/search?path="+dir+"&q=hello&limit=1", "")
+	if strings.Count(body, `"n":`) != 1 || !strings.Contains(body, `"done":false`) {
+		t.Fatalf("limit: %s", body)
+	}
+	if r, _ := do(t, "GET", srv.URL+"/v1/search?path="+dir+"&q=h", ""); r.StatusCode != 400 {
+		t.Fatalf("short q accepted: %d", r.StatusCode)
 	}
 }
 

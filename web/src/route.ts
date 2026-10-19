@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { pushRecent } from './prefs'
 
-export type Route = { machine: string; path: string } | { machine: null; path: '' }
+export type Route = { machine: string; path: string; select?: string } | { machine: null; path: ''; q?: string }
 
 const isWin = (p: string) => /^[A-Za-z]:/.test(p)
 
@@ -12,17 +12,19 @@ export function toURL(machine: string, path: string): string {
 }
 
 function parse(pathname: string): Route {
+  if (pathname === '/search') return { machine: null, path: '', q: new URLSearchParams(location.search).get('q') ?? '' }
   const m = /^\/m\/([^/]+)(\/.*)?$/.exec(pathname)
   if (!m) return { machine: null, path: '' }
   let p = (m[2] ?? '/').split('/').map(decodeURIComponent).join('/')
   if (/^\/[A-Za-z]:/.test(p)) p = p.slice(1).replaceAll('/', '\\').replace(/^([A-Za-z]:)$/, '$1\\')
   if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1)
-  return { machine: decodeURIComponent(m[1]), path: p }
+  return { machine: decodeURIComponent(m[1]), path: p, select: (history.state as { select?: string } | null)?.select }
 }
 
-export function navigate(machine: string | null, path = '') {
+// opts.select pre-selects an entry in the destination folder (used by search results)
+export function navigate(machine: string | null, path = '', opts: { select?: string } = {}) {
   const go = () => {
-    history.pushState(null, '', machine ? toURL(machine, path) : '/')
+    history.pushState(opts.select ? { select: opts.select } : null, '', machine ? toURL(machine, path) : '/')
     dispatchEvent(new PopStateEvent('popstate'))
   }
   const d = document as Document & { startViewTransition?: (f: () => void) => void }
@@ -50,6 +52,11 @@ export function useRoute(): Route {
   // every folder you view becomes a recent, however you got there
   useEffect(() => { if (r.machine) pushRecent(r.machine, r.path) }, [r.machine, r.path])
   return r
+}
+
+export function navigateSearch(q: string) {
+  history.pushState(null, '', '/search?' + new URLSearchParams({ q }))
+  dispatchEvent(new PopStateEvent('popstate'))
 }
 
 // Last segment of a path, for compact labels; drive roots return the root itself.
