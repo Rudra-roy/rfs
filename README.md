@@ -99,7 +99,7 @@ Two static binaries from one Go module. The hub embeds the built React app. Addi
 
 ## Quick start
 
-Prerequisites: Go 1.24+, Node 22, Tailscale installed and logged in on every machine, a domain on Cloudflare, and `ffmpeg` on agents if you want video thumbnails.
+Prerequisites: Tailscale installed and logged in on every machine, a domain on Cloudflare, and `ffmpeg` on agents if you want video thumbnails. Building from source needs Go 1.24+ and Node 22; the agent installer fetches Go for you if the system one is too old.
 
 **1. Build**
 
@@ -115,6 +115,8 @@ deploy/install-agent.sh                       # systemd --user service on Linux
 deploy/install-agent.sh -readonly             # never write to this machine
 deploy/install-agent.sh -mounts /srv:Share    # expose only chosen directories
 ```
+
+The installer uses a prebuilt binary from the latest release when one exists, otherwise it builds from the checkout. If the machine's Go is older than 1.24 it fetches a current toolchain into `~/.local/go`; no sudo needed. Set `RFS_BUILD=1` to force a source build.
 
 For every-file access on a multi-user box, use `deploy/rfs-agent.system.service`, which runs as an unprivileged user with the read-all capability instead of root. For Windows, `make agent-windows` and run `rfs-agent.exe` as a service.
 
