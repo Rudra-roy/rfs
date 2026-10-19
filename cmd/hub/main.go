@@ -114,6 +114,12 @@ func spa() http.Handler {
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 				case p == "sw.js" || p == "manifest.webmanifest" || p == "offline.html":
 					w.Header().Set("Cache-Control", "no-cache") // installed apps must see updates
+				case strings.HasSuffix(p, ".png") || strings.HasSuffix(p, ".svg"):
+					if r.URL.Query().Get("v") != "" { // content-versioned URL from index.html or the manifest
+						w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					} else {
+						w.Header().Set("Cache-Control", "no-cache")
+					}
 				}
 				if p == "manifest.webmanifest" {
 					w.Header().Set("Content-Type", "application/manifest+json")

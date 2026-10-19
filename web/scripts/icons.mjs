@@ -1,23 +1,34 @@
 // Renders PNG app icons and the social preview from favicon.svg with headless Chromium.
 // Run from web/: node scripts/icons.mjs
 import { chromium } from '@playwright/test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 const svg = readFileSync(new URL('../public/favicon.svg', import.meta.url), 'utf8')
 const b = await chromium.launch()
+// "any" icons: the rounded tile on a transparent canvas
 const icon = async (px, out) => {
   const p = await b.newPage({ viewport: { width: px, height: px }, deviceScaleFactor: 1 })
-  await p.setContent(`<body style="margin:0;background:#0f1821">${svg.replace('width="64" height="64"', `width="${px}" height="${px}"`)}</body>`)
-  await p.screenshot({ path: new URL(`../public/${out}`, import.meta.url).pathname, omitBackground: false })
+  await p.setContent(`<body style="margin:0;background:transparent">${svg.replace('width="64" height="64"', `width="${px}" height="${px}"`)}</body>`)
+  await p.screenshot({ path: new URL(`../public/${out}`, import.meta.url).pathname, omitBackground: true })
   await p.close()
 }
-await icon(180, 'apple-touch-icon.png')
+// full-bleed: the plate fills the square and the bays shrink into the safe zone,
+// for iOS (which rounds the corners itself) and Android maskable icons
+const bleed = async (px, out, inset) => {
+  const full = svg.replace('width="64" height="64"', `width="${px}" height="${px}"`)
+    .replace(/<rect x="2" y="2" width="60" height="60" rx="15"/, '<rect x="0" y="0" width="64" height="64" rx="0"')
+    .replace(/<rect x="2.5" y="2.5"[^>]*\/>/, '')
+    .replace(/<g fill="#0f1821">/, `<g transform="translate(32 32) scale(${inset}) translate(-32 -32)"><g fill="#0f1821">`)
+    .replace('</svg>', '</g></svg>')
+  const p = await b.newPage({ viewport: { width: px, height: px } })
+  await p.setContent(`<body style="margin:0">${full}</body>`)
+  await p.screenshot({ path: new URL(`../public/${out}`, import.meta.url).pathname })
+  await p.close()
+}
 await icon(512, 'icon-512.png')
 await icon(192, 'icon-192.png')
-// maskable: launchers crop to a circle or squircle, so the mark sits inside the central 70% on a full-bleed plate
-const mask = await b.newPage({ viewport: { width: 512, height: 512 } })
-await mask.setContent(`<body style="margin:0;width:512px;height:512px;display:grid;place-items:center;background:#0f1821">${svg.replace('width="64" height="64"', 'width="358" height="358"')}</body>`)
-await mask.screenshot({ path: new URL('../public/icon-maskable-512.png', import.meta.url).pathname })
-await mask.close()
+await bleed(180, 'apple-touch-icon.png', 0.92)
+await bleed(512, 'icon-maskable-512.png', 0.78)
 const og = await b.newPage({ viewport: { width: 1200, height: 630 } })
 await og.setContent(`<!doctype html><html><head><style>
   @font-face{font-family:Plex;src:url(file://${process.cwd()}/node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2) format('woff2');font-weight:600}
@@ -45,4 +56,12 @@ await og.setContent(`<!doctype html><html><head><style>
 await og.waitForTimeout(300)
 await og.screenshot({ path: new URL('../public/og.png', import.meta.url).pathname })
 await b.close()
-console.log('icons written')
+// Version every icon URL by content, so browsers and installed apps fetch the new
+// images instead of reusing cached ones under the same URL.
+const v = createHash('sha256').update(svg).digest('hex').slice(0, 10)
+const stamp = f => {
+  const p = new URL(f, import.meta.url).pathname
+  writeFileSync(p, readFileSync(p, 'utf8').replace(/(\/(?:favicon\.svg|apple-touch-icon\.png|icon-[a-z0-9-]+\.png|og\.png))(\?v=[0-9a-f]+)?/g, `$1?v=${v}`))
+}
+stamp('../index.html'); stamp('../public/manifest.webmanifest')
+console.log('icons written, version', v)

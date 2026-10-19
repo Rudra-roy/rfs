@@ -227,7 +227,10 @@ test('installable web app: manifest, service worker, install prompt', async ({ p
   expect(mf.display).toBe('standalone')
   const sizes = mf.icons.map((i: { sizes: string; purpose?: string }) => i.sizes + ':' + (i.purpose ?? 'any'))
   expect(sizes).toEqual(expect.arrayContaining(['192x192:any', '512x512:any', '512x512:maskable']))
-  for (const i of mf.icons) expect((await request.get(i.src)).ok()).toBe(true)
+  for (const i of mf.icons) {
+    expect(i.src).toMatch(/\?v=[0-9a-f]{10}$/) // content-versioned, so a new logo is never served from cache
+    expect((await request.get(i.src)).ok()).toBe(true)
+  }
   expect((await request.get('/sw.js')).headers()['cache-control']).toBe('no-cache')
   await page.goto('/')
   await expect(page.locator('link[rel=manifest]')).toHaveAttribute('crossorigin', 'use-credentials')
