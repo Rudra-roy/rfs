@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -47,6 +48,9 @@ type whoEntry struct {
 
 func New() *Client {
 	sock := "/var/run/tailscale/tailscaled.sock"
+	if v := os.Getenv("RFS_TAILSCALE_SOCKET"); v != "" { // tests, unusual installs
+		sock = v
+	}
 	var dial func(ctx context.Context, _, _ string) (net.Conn, error)
 	if runtime.GOOS == "windows" {
 		dial = func(ctx context.Context, _, _ string) (net.Conn, error) {

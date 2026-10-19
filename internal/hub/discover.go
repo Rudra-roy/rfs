@@ -95,7 +95,7 @@ func (r *Registry) poll() {
 	}
 	nodes := append([]tsl.Node{st.Self}, func() (out []tsl.Node) {
 		for _, p := range st.Peer {
-			if p.UserID == st.Self.UserID && p.OS != "android" && p.OS != "iOS" {
+			if p.UserID == st.Self.UserID {
 				out = append(out, p)
 			}
 		}
@@ -181,6 +181,9 @@ func (r *Registry) List() []Machine {
 	defer r.mu.RUnlock()
 	out := make([]Machine, 0, len(r.machines))
 	for _, m := range r.machines {
+		if (m.OS == "android" || m.OS == "iOS") && !m.Agent && m.LastSeen.IsZero() {
+			continue // a phone joins the rack once it has run an agent
+		}
 		out = append(out, *m)
 	}
 	sort.Slice(out, func(i, j int) bool {

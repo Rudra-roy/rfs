@@ -123,6 +123,14 @@ deploy/install-agent.sh -mounts /srv:Share    # expose only chosen directories
 
 The installer uses a prebuilt binary from the latest release when one exists, otherwise it builds from the checkout. If the machine's Go is older than 1.24 it fetches a current toolchain into `~/.local/go`; no sudo needed. Set `RFS_BUILD=1` to force a source build.
 
+**Android phones** run the agent inside Termux, next to the Tailscale app. No clone needed:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Rudra-roy/rfs/main/deploy/install-agent-termux.sh && bash install-agent-termux.sh
+```
+
+It asks for storage access, your hub's tailnet IP and an access password, then runs as a background service that also starts after a reboot (with the Termux:Boot app). The phone's internal storage and SD cards appear in the rack. Android does not let Termux reach the Tailscale daemon, so a phone agent accepts calls only from the hub IPs you give it, with `-allow-from`.
+
 For every-file access on a multi-user box, use `deploy/rfs-agent.system.service`, which runs as an unprivileged user with the read-all capability instead of root. For Windows, `make agent-windows` and run `rfs-agent.exe` as a service.
 
 **3. Put the hub behind Cloudflare**

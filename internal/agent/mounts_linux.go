@@ -19,6 +19,9 @@ var skipFS = map[string]bool{
 }
 
 func Mounts() ([]Mount, error) {
+	if IsAndroid() {
+		return androidMounts("/storage")
+	}
 	f, err := os.Open("/proc/self/mountinfo")
 	if err != nil {
 		return nil, err

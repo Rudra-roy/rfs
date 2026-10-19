@@ -54,6 +54,9 @@ type ent struct {
 	Mtime int64
 }
 
+// IndexFloor is the shortest gap between rebuilds; phones raise it to save battery.
+var IndexFloor = 15 * time.Minute
+
 const rebuildEvery = 6 * time.Hour // ceiling; cheap drives rebuild far more often
 
 // interval between rebuilds: 60x the last build time, between 15 minutes and 6 hours,
@@ -63,7 +66,7 @@ func (x *Index) interval() time.Duration {
 	took := x.took
 	x.mu.RUnlock()
 	d := 60 * took
-	return max(15*time.Minute, min(rebuildEvery, d))
+	return max(IndexFloor, min(rebuildEvery, d))
 }
 
 var indexDirsSkip = skipDirs // same list the live walk uses
@@ -71,7 +74,7 @@ var indexDirsSkip = skipDirs // same list the live walk uses
 // top-level system directories of an OS drive: never worth indexing for a
 // personal file search, and the bulk of a root filesystem's entry count
 var systemTop = map[string]bool{"usr": true, "var": true, "snap": true, "boot": true, "lib": true, "lib32": true, "lib64": true, "libx32": true,
-	"bin": true, "sbin": true, "lost+found": true, "Windows": true, "Program Files": true, "Program Files (x86)": true, "ProgramData": true, "$Recycle.Bin": true, "System Volume Information": true}
+	"bin": true, "sbin": true, "lost+found": true, "Android": true, "Windows": true, "Program Files": true, "Program Files (x86)": true, "ProgramData": true, "$Recycle.Bin": true, "System Volume Information": true}
 
 func NewIndex(mount string, max int) *Index {
 	return &Index{Mount: mount, Max: max, dirID: map[string]uint32{}, pending: map[string]bool{}, touchedAt: map[string]time.Time{}, timers: map[string]*time.Timer{}}
