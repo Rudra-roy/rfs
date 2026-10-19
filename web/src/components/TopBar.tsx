@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Eye, EyeOff, HardDrive, LayoutGrid, List, Lock, LockOpen, PanelLeft, PanelRight, Pencil, Pin, Settings as SettingsIcon } from 'lucide-react'
 import { Mark } from './Mark'
 import { isLocked, label, lock, type Machine } from '../api'
-import { crumbs, navigate, navigateTo } from '../route'
+import { crumbs, navigate, toggleSettings } from '../route'
 import { useBusy } from '../transfers'
 import { Button, IconButton, Led, MachineMark, Menu, MenuItem, TextInput, cx } from './ui'
 import { bytes, hueOf } from '../format'
@@ -44,7 +44,7 @@ export function TopBar({ machines, machine, path, view, onView, hidden, onHidden
             <IconButton label="Grid view" active={view === 'grid'} onClick={() => onView('grid')} className="size-8"><LayoutGrid /></IconButton>
           </div>
           {cur && <IconButton label={details ? 'Hide details' : 'Show details'} active={details} onClick={onDetails} className="hidden lg:grid"><PanelRight /></IconButton>}
-          <IconButton label="Security settings" active={settings} onClick={() => navigateTo('/settings')}><SettingsIcon /></IconButton>
+          <IconButton label={settings ? 'Close security settings' : 'Security settings'} active={settings} onClick={() => toggleSettings(!!settings)}><SettingsIcon /></IconButton>
         </div>
       </div>
       {!wide && cur && !isLocked(cur) && <div className="h-10 flex items-center px-2 border-t border-line/60"><Crumbs machine={cur} path={path} mount={mount?.path} /></div>}

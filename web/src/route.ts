@@ -56,8 +56,16 @@ export function useRoute(): Route {
 }
 
 export function navigateTo(pathname: string) {
-  history.pushState(null, '', pathname)
+  history.pushState({ inApp: true }, '', pathname) // marks that Back stays inside the app
   dispatchEvent(new PopStateEvent('popstate'))
+}
+
+// Settings is a toggle: open it, or leave it to wherever you came from.
+// Opened directly (bookmark, reload), there is no in-app page behind it, so go home.
+export function toggleSettings(open: boolean) {
+  if (!open) return navigateTo('/settings')
+  if ((history.state as { inApp?: boolean } | null)?.inApp) history.back()
+  else navigate(null)
 }
 
 export function navigateSearch(q: string) {

@@ -17,6 +17,9 @@ test.beforeAll(async () => {
   const ms = await (await fetch('http://127.0.0.1:7430/api/machines')).json() as { name: string; mounts: { label: string; path: string }[] }[]
   const me = ms.find(m => m.name === machine)
   driveCount = ms.reduce((a, m) => a + ((m as { agent?: boolean }).agent ? m.mounts.length : 0), 0)
+  // this machine may have an access password; unlock it for the dev user when the suite is given it
+  if (process.env.RFS_E2E_PASSWORD)
+    await fetch(`http://127.0.0.1:7430/api/m/${machine}/unlock`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: process.env.RFS_E2E_PASSWORD }) })
   // a previous run may have left a display name on this machine; tests assume the hostname
   await fetch(`http://127.0.0.1:7430/api/machines/${machine}/alias`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{"alias":""}' })
   drive = me?.mounts.find(d => d.path !== '/')
@@ -204,6 +207,18 @@ function totp(secretB32: string, at = Date.now()): string {
   const off = h[h.length - 1] & 0x0f
   return String((h.readUInt32BE(off) & 0x7fffffff) % 1_000_000).padStart(6, '0')
 }
+
+test('gear toggles security settings and returns to the previous page', async ({ page }) => {
+  await page.goto(`/m/${machine}${dir}`)
+  await page.getByRole('button', { name: 'Security settings' }).click()
+  await expect(page).toHaveURL('/settings')
+  await page.getByRole('button', { name: 'Close security settings' }).click()
+  await expect(page).toHaveURL(`/m/${machine}${dir}`)
+  // opened directly, the second click goes home instead of leaving the site
+  await page.goto('/settings')
+  await page.getByRole('button', { name: 'Close security settings' }).click()
+  await expect(page).toHaveURL('/')
+})
 
 test('two-step verification: enrol, gate, verify, disable', async ({ page, context }) => {
   await page.goto('/settings')
