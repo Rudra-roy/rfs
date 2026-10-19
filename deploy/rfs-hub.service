@@ -1,0 +1,15 @@
+# systemd --user unit. Install:
+#   mkdir -p ~/.config/systemd/user && cp deploy/rfs-hub.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now rfs-hub
+[Unit]
+Description=rfs hub
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/rfs/hub.env
+ExecStart=%h/Documents/rudra_fileserver/bin/rfs-hub
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target

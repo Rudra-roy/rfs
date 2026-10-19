@@ -1,0 +1,6 @@
+[
+  { "name": "atlas",  "os": "linux",   "ip": "AGENT_IP", "port": "7431" },
+  { "name": "nimbus", "os": "linux",   "ip": "AGENT_IP", "port": "7432" },
+  { "name": "forge",  "os": "windows", "online": true,  "agent": false },
+  { "name": "relay",  "os": "linux",   "online": false, "agent": false, "lastSeen": "LAST_SEEN" }
+]

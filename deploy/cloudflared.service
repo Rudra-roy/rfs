@@ -1,0 +1,13 @@
+# systemd --user unit. Needs TUNNEL_TOKEN in ~/.config/rfs/hub.env.
+[Unit]
+Description=cloudflared tunnel for the rfs hub
+After=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/rfs/hub.env
+ExecStart=%h/.local/bin/cloudflared tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

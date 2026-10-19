@@ -1,0 +1,22 @@
+{
+  "_name": "Gunmetal & Amber LED (synthesized)",
+  "_sources": [
+    "https://colorhunt.co/palette/222831393e46ffd369eeeeee",
+    "https://coolors.co/palette/0d1b2a-1b263b-415a77-778da9-e0e1dd",
+    "https://www.happyhues.co/palettes/10",
+    "https://github.com/radix-ui/colors (slateDark, amberDark step semantics)",
+    "https://github.com/rebelot/kanagawa.nvim (signals-vivid / decoratives-muted split)"
+  ],
+  "bg": "#0f1821", "surface": "#18212b", "surface2": "#222b35", "surface3": "#2b353f",
+  "line": "#303a44", "lineStrong": "#5c6873",
+  "fg": "#ede9e1", "muted": "#99a6b4", "faint": "#677686",
+  "accent": "#f0b13b", "accentFg": "#1e1607", "accentDim": "#372a14",
+  "success": "#3aba6a", "warning": "#f99549", "danger": "#ef6661", "info": "#7ba8f3",
+  "successDim": "#1b3324", "warningDim": "#3c2719", "dangerDim": "#3e2522", "infoDim": "#212d41",
+  "folder": "#f0b13b", "image": "#ed9ac1", "video": "#cba4ee", "audio": "#5fccc8",
+  "document": "#f0a08c", "code": "#67c6e5", "archive": "#c5a482", "other": "#95a0ab",
+  "m1": "#c3ba75", "m2": "#9cb4fe", "m3": "#99c77f", "m4": "#f199b4",
+  "m5": "#59ceba", "m6": "#f2a07c", "m7": "#5ec6ec", "m8": "#d2a2e8",
+  "driveLow": "#5ac0ab", "driveMid": "#f99549", "driveHigh": "#ef6661",
+  "selection": "#22374b", "focus": "#f0b13b", "heroA": "#2f2416", "heroB": "#0f1821"
+}

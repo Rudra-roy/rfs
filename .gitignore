@@ -1,0 +1,8 @@
+/bin/
+/web/node_modules/
+/web/dist/*
+!/web/dist/.gitkeep
+*.env
+/.claude/
+/web/test-results/
+/web/playwright-report/

@@ -1,0 +1,22 @@
+# System unit: reads every file on the machine without running as root.
+#   sudo useradd -r -s /usr/sbin/nologin rfs
+#   sudo install -m 755 bin/rfs-agent /usr/local/bin/rfs-agent
+#   sudo cp deploy/rfs-agent.system.service /etc/systemd/system/rfs-agent.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now rfs-agent
+[Unit]
+Description=rfs agent
+After=network-online.target tailscaled.service
+
+[Service]
+User=rfs
+ExecStart=/usr/local/bin/rfs-agent
+AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

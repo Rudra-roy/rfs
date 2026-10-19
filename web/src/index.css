@@ -1,0 +1,213 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+
+@theme {
+  --color-*: initial;
+  --color-bg: #0f1821;
+  --color-surface: #18212b;
+  --color-surface-2: #222b35;
+  --color-surface-3: #2b353f;
+  --color-line: #303a44;
+  --color-line-strong: #5c6873;
+  --color-fg: #ede9e1;
+  --color-muted: #99a6b4;
+  --color-faint: #677686;
+  --color-amber: #f0b13b;
+  --color-amber-dim: #372a14;
+  --color-ember: #ef6661;
+  --color-ember-dim: #3e2522;
+  --color-accent: #f0b13b;
+  --color-accent-fg: #1e1607;
+  --color-accent-dim: #372a14;
+  --color-success: #3aba6a;
+  --color-warning: #f99549;
+  --color-danger: #ef6661;
+  --color-info: #7ba8f3;
+  --color-success-dim: #1b3324;
+  --color-warning-dim: #3c2719;
+  --color-danger-dim: #3e2522;
+  --color-info-dim: #212d41;
+  --color-kind-folder: #f0b13b;
+  --color-kind-image: #ed9ac1;
+  --color-kind-video: #cba4ee;
+  --color-kind-audio: #5fccc8;
+  --color-kind-document: #f0a08c;
+  --color-kind-code: #67c6e5;
+  --color-kind-archive: #c5a482;
+  --color-kind-other: #95a0ab;
+  --color-m1: #c3ba75; --color-m2: #9cb4fe; --color-m3: #99c77f; --color-m4: #f199b4;
+  --color-m5: #59ceba; --color-m6: #f2a07c; --color-m7: #5ec6ec; --color-m8: #d2a2e8;
+  --color-drive-low: #5ac0ab;
+  --color-drive-mid: #f99549;
+  --color-drive-high: #ef6661;
+  --color-selection: #22374b;
+  --color-focus: #f0b13b;
+  --color-hero-a: #2f2416;
+  --color-hero-b: #0f1821;
+  --color-white: #fff;
+  --color-black: #000;
+  --color-transparent: transparent;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.45), 0 0 0 1px rgb(237 232 223 / 0.08);
+  --shadow-sheet: 0 -12px 40px rgb(0 0 0 / 0.5);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+
+  --animate-rise: rise 320ms var(--ease-out-quart) both;
+  --animate-sheet: sheet 320ms var(--ease-out-quart) both;
+  --animate-drawer: drawer 260ms var(--ease-out-quart) both;
+  --animate-panel: panel 260ms var(--ease-out-quart) both;
+  --animate-fade: fade 200ms ease-out both;
+  --animate-pop: pop 160ms var(--ease-out-quart) both;
+  --animate-led: led 0.9s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.4s linear infinite;
+
+  @keyframes rise { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+  @keyframes sheet { from { transform: translateY(100%) } to { transform: none } }
+  @keyframes drawer { from { transform: translateX(-100%) } to { transform: none } }
+  @keyframes panel { from { opacity: 0; transform: translateX(16px) } to { opacity: 1; transform: none } }
+  @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+  @keyframes pop { from { opacity: 0; transform: translateY(-4px) scale(.98) } to { opacity: 1; transform: none } }
+  @keyframes led { 0%, 100% { opacity: 1 } 50% { opacity: .2 } }
+  @keyframes shimmer { from { background-position: 200% 0 } to { background-position: -200% 0 } }
+}
+
+html {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum", "ss01";
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+body { margin: 0; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; border-radius: var(--radius-sm); }
+::selection { background: color-mix(in oklab, var(--color-accent) 40%, transparent); }
+* { scrollbar-width: thin; scrollbar-color: var(--color-surface-3) transparent; }
+
+/* Only the browsing area cross-fades between folders; chrome stays put. */
+.vt-main { view-transition-name: main; }
+::view-transition-old(main), ::view-transition-new(main) { animation-duration: 160ms; }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* a pressable control: hover lift, press sink */
+.press { transition: background-color 120ms, color 120ms, border-color 120ms, transform 80ms; }
+.press:active { transform: translateY(0.5px) scale(0.99); }
+
+/* landing glow: one radial wash behind the hero, nothing else moves */
+.hero-glow { background: radial-gradient(900px 420px at 18% -10%, var(--color-hero-a), var(--color-hero-b) 70%); }
+
+/* per-kind and per-machine color utilities driven by data attributes */
+[data-kind="folder"]   { --kind: var(--color-kind-folder); }
+[data-kind="image"]    { --kind: var(--color-kind-image); }
+[data-kind="video"]    { --kind: var(--color-kind-video); }
+[data-kind="audio"]    { --kind: var(--color-kind-audio); }
+[data-kind="document"] { --kind: var(--color-kind-document); }
+[data-kind="code"]     { --kind: var(--color-kind-code); }
+[data-kind="archive"]  { --kind: var(--color-kind-archive); }
+[data-kind="other"]    { --kind: var(--color-kind-other); }
+[data-hue="1"] { --hue: var(--color-m1); } [data-hue="2"] { --hue: var(--color-m2); }
+[data-hue="3"] { --hue: var(--color-m3); } [data-hue="4"] { --hue: var(--color-m4); }
+[data-hue="5"] { --hue: var(--color-m5); } [data-hue="6"] { --hue: var(--color-m6); }
+[data-hue="7"] { --hue: var(--color-m7); } [data-hue="8"] { --hue: var(--color-m8); }
+.text-kind { color: var(--kind); }
+.bg-kind-dim { background: color-mix(in oklab, var(--kind) 14%, transparent); }
+.text-hue { color: var(--hue); }
+.bg-hue { background: var(--hue); }
+.bg-hue-dim { background: color-mix(in oklab, var(--hue) 16%, transparent); }
+.ring-hue { box-shadow: inset 3px 0 0 var(--hue); }
+
+/* ---- the rack, in light 3D: perspective on the cabinet, extruded faceplates, sled bays, bezelled LEDs ---- */
+.rack3d { perspective: 1800px; perspective-origin: 50% -20%; }
+.rack { position: relative; padding-inline: 18px; transform: rotateX(3deg); transform-origin: 50% 0; }
+.rack::before, .rack::after {
+  content: ''; position: absolute; top: -6px; bottom: -6px; width: 12px; border-radius: 3px;
+  background:
+    radial-gradient(circle at center, rgb(0 0 0 / 0.75) 1.6px, rgb(255 255 255 / 0.06) 1.9px, transparent 2.3px) 0 4px / 12px 12px,
+    linear-gradient(90deg, var(--color-surface) 0%, var(--color-surface-3) 45%, var(--color-surface-2) 100%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.04), 0 2px 6px rgb(0 0 0 / 0.5);
+}
+.rack::before { left: 0 } .rack::after { right: 0 }
+
+.unit {
+  position: relative; border-radius: 8px;
+  background: linear-gradient(180deg, var(--color-surface-3) 0%, var(--color-surface-2) 12%, var(--color-surface) 100%);
+  border: 1px solid var(--color-line); border-top-color: rgb(255 255 255 / 0.10);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    0 1px 0 var(--color-surface-3),
+    0 2px 0 rgb(0 0 0 / 0.55),
+    0 3px 0 rgb(0 0 0 / 0.35),
+    0 10px 22px -6px rgb(0 0 0 / 0.6);
+  transition: transform 220ms var(--ease-out-quart), box-shadow 220ms var(--ease-out-quart);
+}
+.unit + .unit, .unit + ul { margin-top: 8px }
+.unit:hover {
+  transform: translateY(-2px);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), 0 1px 0 var(--color-surface-3), 0 3px 0 rgb(0 0 0 / 0.55), 0 4px 0 rgb(0 0 0 / 0.35), 0 18px 30px -8px rgb(0 0 0 / 0.7);
+}
+/* four mounting screws on the faceplate */
+.unit::before, .unit::after {
+  content: ''; position: absolute; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, var(--color-surface-3), var(--color-bg) 70%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.06);
+}
+.unit::before { left: -13px } .unit::after { right: -13px }
+
+.slot { border: 1px dashed var(--color-line-strong); border-radius: 8px; opacity: .85; background: rgb(0 0 0 / 0.12); }
+
+/* a drive sled: a short extruded block with a handle notch and LED capacity cells */
+.bay {
+  position: relative; border-radius: 6px; overflow: hidden;
+  background: linear-gradient(180deg, color-mix(in oklab, var(--color-surface-3) 80%, white 0%) 0%, var(--color-bg) 100%);
+  border: 1px solid var(--color-line); border-top-color: rgb(255 255 255 / 0.12);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06), inset 0 -3px 0 rgb(0 0 0 / 0.45), 0 2px 0 rgb(0 0 0 / 0.5), 0 6px 12px -6px rgb(0 0 0 / 0.6);
+  transition: transform 160ms var(--ease-out-quart), box-shadow 160ms, border-color 160ms;
+}
+.bay::after { /* handle notch */
+  content: ''; position: absolute; right: 8px; top: 9px; width: 3px; height: 12px; border-radius: 2px;
+  background: linear-gradient(180deg, var(--color-surface-3), var(--color-bg));
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(255 255 255 / 0.04);
+}
+.bay:hover { transform: translateY(-1px); border-color: var(--color-line-strong); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.08), inset 0 -3px 0 rgb(0 0 0 / 0.45), 0 3px 0 rgb(0 0 0 / 0.5), 0 10px 16px -6px rgb(0 0 0 / 0.7); }
+.bay:active { transform: translateY(1px); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04), inset 0 -1px 0 rgb(0 0 0 / 0.45), 0 1px 0 rgb(0 0 0 / 0.5); }
+.cell { height: 9px; flex: 1; border-radius: 2px; background: var(--color-bg); box-shadow: inset 0 1px 1px rgb(0 0 0 / 0.7), 0 1px 0 rgb(255 255 255 / 0.04); }
+.cell.lit { background: var(--lit); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 0 6px color-mix(in oklab, var(--lit) 55%, transparent), 0 0 1px var(--lit); }
+
+/* bezelled status LED */
+.led-bezel {
+  display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, var(--color-surface-3), var(--color-bg) 75%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.6), 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* fleet bar: glass tube segments */
+.tube { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -2px 3px rgb(0 0 0 / 0.5), 0 1px 0 rgb(0 0 0 / 0.5); }
+.tube-fill { background: linear-gradient(180deg, color-mix(in oklab, var(--hue) 100%, white 18%) 0%, var(--hue) 45%, color-mix(in oklab, var(--hue) 80%, black 20%) 100%); box-shadow: 0 0 10px color-mix(in oklab, var(--hue) 35%, transparent); }
+
+.scroll-fade { mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  .rack { transform: none; } .unit:hover, .bay:hover { transform: none; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

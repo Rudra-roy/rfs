@@ -1,0 +1,16 @@
+# systemd --user unit for the agent on a Linux node.
+#   cp deploy/rfs-agent.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user enable --now rfs-agent
+# Reads everything the running user can read. For all-drives access on a
+# machine where you are not the owner of every file, install the system unit
+# instead (deploy/rfs-agent.system.service) which uses CAP_DAC_READ_SEARCH.
+[Unit]
+Description=rfs agent
+After=network-online.target tailscaled.service
+
+[Service]
+ExecStart=%h/.local/bin/rfs-agent
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
