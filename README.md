@@ -123,13 +123,7 @@ deploy/install-agent.sh -mounts /srv:Share    # expose only chosen directories
 
 The installer uses a prebuilt binary from the latest release when one exists, otherwise it builds from the checkout. If the machine's Go is older than 1.24 it fetches a current toolchain into `~/.local/go`; no sudo needed. Set `RFS_BUILD=1` to force a source build.
 
-**Android phones** run the agent inside Termux, next to the Tailscale app. No clone needed:
-
-```sh
-curl -fsSLO https://raw.githubusercontent.com/Rudra-roy/rfs/main/deploy/install-agent-termux.sh && bash install-agent-termux.sh
-```
-
-It asks for storage access, your hub's tailnet IP and an access password, then runs as a background service that also starts after a reboot (with the Termux:Boot app). The phone's internal storage and SD cards appear in the rack. Android does not let Termux reach the Tailscale daemon, so a phone agent accepts calls only from the hub IPs you give it, with `-allow-from`.
+**Android phones** run the agent inside Termux. See [Android phone agent](#android-phone-agent-termux) below.
 
 For every-file access on a multi-user box, use `deploy/rfs-agent.system.service`, which runs as an unprivileged user with the read-all capability instead of root. For Windows, `make agent-windows` and run `rfs-agent.exe` as a service.
 
@@ -147,6 +141,82 @@ systemctl --user daemon-reload && systemctl --user enable --now rfs-hub cloudfla
 ```
 
 Open the hostname from a phone on mobile data. You should see your identity provider's login, then the rack.
+
+## Android phone agent (Termux)
+
+An Android phone can join the rack like any other machine. Its internal storage shows up as **Phone** and each SD card as **SD card**. The agent runs inside [Termux](https://termux.dev), next to the Tailscale app.
+
+### Before you start
+
+- **Tailscale app** installed on the phone, signed in to the same tailnet as the hub, and connected.
+- **Termux from [F-Droid](https://f-droid.org/packages/com.termux/) or [GitHub](https://github.com/termux/termux-app/releases).** The Play Store build is outdated and its package installs fail.
+- **Termux:Boot** from the same source as Termux, if you want the agent to start after a reboot.
+- **Your hub's tailnet IP.** Open the Tailscale app and tap the hub machine; it starts with `100.`.
+- A published release on GitHub, since the installer downloads the agent binary from the latest one.
+
+### Install
+
+Open Termux and run:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/Rudra-roy/rfs/main/deploy/install-agent-termux.sh
+bash install-agent-termux.sh
+```
+
+No clone is needed. The installer:
+
+1. Installs `termux-services` and `curl`.
+2. Asks for storage access. Tap **Allow** in the Android dialog.
+3. Downloads the agent for your phone's CPU from the latest release and checks it against the release's `SHA256SUMS`. A mismatch aborts the install.
+4. Asks for the hub's tailnet IP, and for an access password for the phone. Leave the password empty for none.
+5. Registers the agent as a Termux service, adds a Termux:Boot entry, and takes a wake lock.
+
+The phone appears in the rack within 15 seconds. To skip the prompts, set `RFS_HUB=100.x.y.z` before running it.
+
+### Keep it running
+
+Android stops background apps aggressively. Do both of these:
+
+- **Battery:** Android Settings, Apps, Termux, Battery, set to **Unrestricted**. Without this the agent stops minutes after the screen turns off.
+- **Reboots:** open the Termux:Boot app once after installing it. From then on the agent starts with the phone.
+
+Termux shows a persistent notification while it holds the wake lock. Leave it; that is what keeps the agent alive.
+
+### Day to day
+
+```sh
+sv status rfs-agent                                  # running or not
+tail -f $PREFIX/var/log/sv/rfs-agent/current         # live log
+sv restart rfs-agent                                 # after changing settings
+sv down rfs-agent                                    # stop until the next sv up or reboot
+~/.local/bin/rfs-agent -set-password && sv restart rfs-agent   # set or change the access password
+pkg install ffmpeg                                   # optional: thumbnails for videos
+```
+
+**Update** to the latest release by running the installer again. It keeps your password and asks for the hub IP again.
+
+**Uninstall:**
+
+```sh
+sv down rfs-agent
+rm -rf $PREFIX/var/service/rfs-agent ~/.termux/boot/rfs-agent ~/.local/bin/rfs-agent ~/.config/rfs ~/.cache/rfs
+termux-wake-unlock
+```
+
+### How it stays secure
+
+Android does not let Termux reach the Tailscale daemon, so the phone agent cannot ask Tailscale who is calling. It accepts connections only from the hub IPs passed with `-allow-from`. Inside a tailnet every source address is bound to a device key, so a connection from the hub's tailnet IP really is the hub. The agent refuses non-tailnet addresses at startup and listens only on the phone's tailnet IP. Your access password applies on top. If you run more than one hub, list them all: `-allow-from 100.a.b.c,100.d.e.f`, by editing `$PREFIX/var/service/rfs-agent/run`.
+
+### Troubleshooting
+
+| Log line or symptom | Fix |
+|---|---|
+| `no tailnet address on any interface` | Tailscale is disconnected, or this Android version hides network interfaces from Termux. Reconnect Tailscale. If it persists, edit `$PREFIX/var/service/rfs-agent/run` and add `-listen 100.x.y.z:7421` with the phone's own tailnet IP, then `sv restart rfs-agent`. |
+| `no readable phone storage` | Run `termux-setup-storage` and allow access, then `sv restart rfs-agent`. |
+| `Checksum mismatch` during install | A broken or partial download. Run the installer again; it resumes. |
+| Phone missing from the rack | Check `sv status rfs-agent`, that Tailscale is connected on both ends, and that the IP you entered is the hub's, not the phone's. |
+| Agent stops after a while | Termux battery setting is not Unrestricted, or the Termux notification was dismissed. |
+| `sv: command not found` right after install | Close Termux completely, reopen it, and run `sv up rfs-agent`. |
 
 ## Security model
 
