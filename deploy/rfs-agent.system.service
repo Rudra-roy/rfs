@@ -9,6 +9,8 @@ After=network-online.target tailscaled.service
 
 [Service]
 User=rfs
+# access password hash written by: sudo -u rfs RFS_PASSFILE=/etc/rfs/agent.pass rfs-agent -set-password
+Environment=RFS_PASSFILE=/etc/rfs/agent.pass
 ExecStart=/usr/local/bin/rfs-agent
 AmbientCapabilities=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE
 CapabilityBoundingSet=CAP_DAC_READ_SEARCH CAP_DAC_OVERRIDE

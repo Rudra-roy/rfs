@@ -1,5 +1,5 @@
-import { ChevronRight, Clock, Laptop, Monitor, Pin, Server, Smartphone } from 'lucide-react'
-import type { Machine, Mount } from '../api'
+import { ChevronRight, Clock, Laptop, Lock, Monitor, Pin, Server, Smartphone } from 'lucide-react'
+import { isLocked, label, type Machine, type Mount } from '../api'
 import { ago, bytes, hueOf } from '../format'
 import { navigate, tail } from '../route'
 import { useLocs } from '../prefs'
@@ -86,8 +86,8 @@ export function Nav({ machines, machine, path, onPick }: { machines: Machine[]; 
           <ul className="mt-1">
             {rest.map(m => (
               <li key={m.name} className="flex items-center gap-2 h-8 px-2 text-[13px] text-fg/70">
-                <MachineMark name={m.name} hue={hueOf(m.name)} size="sm" />
-                <span className="truncate">{m.name}</span>
+                <MachineMark name={label(m)} hue={hueOf(m.name)} size="sm" />
+                <span className="truncate">{label(m)}</span>
                 <Led state={stateOf(m)} />
                 <span className="ml-auto text-faint"><OsIcon os={m.os} /></span>
               </li>
@@ -102,11 +102,12 @@ export function Nav({ machines, machine, path, onPick }: { machines: Machine[]; 
 function MachineGroup({ m, current, path, onPick }: { m: Machine; current: boolean; path: string; onPick?: () => void }) {
   const busy = useBusy(m.name)
   return (
-    <section className="mb-1.5 rounded-md" data-hue={hueOf(m.name)}>
+    <section className="mb-1.5 rounded-md" data-hue={hueOf(m.name)} data-machine={m.name}>
       <div className={cx('flex items-center gap-2 px-2 h-9 rounded-sm', current && 'bg-surface-2')}>
-        <MachineMark name={m.name} hue={hueOf(m.name)} size="sm" />
-        <span className={cx('truncate text-[14px]', current ? 'font-medium' : 'text-fg/90')}>{m.name}</span>
+        <MachineMark name={label(m)} hue={hueOf(m.name)} size="sm" />
+        <span className={cx('truncate text-[14px]', current ? 'font-medium' : 'text-fg/90')} title={m.alias ? `${m.alias} (${m.name})` : m.name}>{label(m)}</span>
         <span className="led-bezel scale-90 ml-0.5"><Led state="agent" busy={busy} /></span>
+        {isLocked(m) && <Lock className="size-3.5 text-muted" aria-label="locked" />}
         <span className="ml-auto text-faint"><OsIcon os={m.os} /></span>
       </div>
       <ul className="mt-0.5">

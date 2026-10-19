@@ -25,9 +25,9 @@ export function Button({ variant = 'outline', size = 'md', icon, className, chil
   )
 }
 
-export function IconButton({ label, active, className, children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }) {
+export function IconButton({ label, active, className, children, type = 'button', ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement> & { label: string; active?: boolean }) {
   return (
-    <button {...rest} aria-label={label} title={label} aria-pressed={active}
+    <button type={type} {...rest} aria-label={label} title={label} aria-pressed={active}
       className={cx('press grid place-items-center size-9 rounded-sm [&>svg]:size-[18px] disabled:opacity-40 disabled:pointer-events-none',
         active ? 'bg-accent-dim text-accent' : 'text-muted hover:text-fg hover:bg-surface-2', className)}>
       {children}

@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,7 +24,11 @@ func main() {
 	devEmail := flag.String("dev-email", "", "DEV ONLY: skip Cloudflare Access and act as this email (loopback bind required)")
 	demoFleet := flag.String("demo-fleet", "", "DEMO: serve this JSON fleet instead of discovering the tailnet")
 	auditPath := flag.String("audit", os.Getenv("RFS_AUDIT_LOG"), "append one JSON line per API request to this file (default: stderr)")
+	stateDir := flag.String("state", defaultStateDir(), "directory for hub state such as machine aliases")
 	flag.Parse()
+	aliases := hub.LoadAliases(*stateDir)
+	unlocks := hub.NewUnlocks()
+	otp := hub.LoadOTP(*stateDir)
 	audit, err := hub.OpenAudit(*auditPath)
 	if err != nil {
 		log.Fatalf("audit log: %v", err)
@@ -64,15 +69,23 @@ func main() {
 	})
 	api.HandleFunc("GET /api/machines", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(reg.List())
+		ms := aliases.Apply(reg.List())
+		for i := range ms {
+			ms[i].Unlocked = !ms[i].Locked || unlocks.Token(hub.Email(r), ms[i].Name) != ""
+		}
+		json.NewEncoder(w).Encode(ms)
 	})
-	api.Handle("GET /api/search", hub.Search(reg, *agentPort))
-	api.Handle("/api/m/{name}/{rest...}", hub.Proxy(reg, *agentPort))
+	api.Handle("PUT /api/machines/{name}/alias", aliases.Handler(reg))
+	api.Handle("POST /api/m/{name}/unlock", unlocks.Handler(reg, *agentPort))
+	api.Handle("POST /api/m/{name}/lock", unlocks.Handler(reg, *agentPort))
+	api.Handle("GET /api/search", hub.Search(reg, *agentPort, unlocks))
+	api.Handle("/api/m/{name}/{rest...}", hub.Proxy(reg, *agentPort, unlocks))
+	otp.Routes(api, "rfs")
 	api.Handle("/", spa())
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { fmt.Fprintln(w, "ok") })
-	mux.Handle("/", auth(audit.Wrap(api)))
+	mux.Handle("/", auth(audit.Wrap(otp.Require(api))))
 	log.Printf("rfs-hub listening on %s", *addr)
 	log.Fatal(http.ListenAndServe(*addr, mux))
 }
@@ -96,4 +109,12 @@ func spa() http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		http.ServeFileFS(w, r, dist, "index.html")
 	})
+}
+
+func defaultStateDir() string {
+	if d := os.Getenv("XDG_STATE_HOME"); d != "" {
+		return filepath.Join(d, "rfs")
+	}
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "state", "rfs")
 }

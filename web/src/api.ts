@@ -1,18 +1,38 @@
 import { track } from './transfers'
 
 export type Mount = { path: string; label: string; fstype: string; total: number; free: number }
-export type Machine = { name: string; ip: string; os: string; online: boolean; agent: boolean; lastSeen: string; mounts: Mount[] }
+export type Machine = { name: string; alias?: string; ip: string; os: string; online: boolean; agent: boolean; locked: boolean; unlocked: boolean; lastSeen: string; mounts: Mount[] }
+export const isLocked = (m?: Machine) => !!m && m.locked && !m.unlocked
+// what to call a machine in the UI; URLs and colours stay on the real name
+export const label = (m: { name: string; alias?: string }) => m.alias || m.name
 export type Entry = { n: string; d?: boolean; s: number; m: number }
 
 const CHUNK = 32 * 1024 * 1024 // Cloudflare caps a request body at 100 MB
 
 async function check(r: Response): Promise<Response> {
   if (r.ok) return r
-  throw new Error((await r.text()).trim() || r.statusText)
+  const text = (await r.text()).trim()
+  if (r.status === 401 && text.includes('"otp":true')) { dispatchEvent(new Event('rfs:otp')); throw new Error('second factor required') }
+  const e = new Error(text || r.statusText) as Error & { status: number }
+  e.status = r.status
+  throw e
 }
 
 export const machines = (): Promise<Machine[]> => fetch('/api/machines').then(check).then(r => r.json())
 export const me = (): Promise<{ email: string }> => fetch('/api/me').then(check).then(r => r.json())
+const post = (url: string, body?: unknown) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) }).then(check)
+export const unlock = (name: string, password: string) => post(`/api/m/${encodeURIComponent(name)}/unlock`, { password }).then(() => dispatchEvent(new Event('rfs:machines')))
+export const lock = (name: string) => post(`/api/m/${encodeURIComponent(name)}/lock`).then(() => dispatchEvent(new Event('rfs:machines')))
+export const otp = {
+  status: (): Promise<{ enrolled: boolean; verified: boolean }> => fetch('/api/otp/status').then(check).then(r => r.json()),
+  enroll: (): Promise<{ secret: string; uri: string }> => post('/api/otp/enroll').then(r => r.json()),
+  confirm: (code: string) => post('/api/otp/confirm', { code }),
+  verify: (code: string) => post('/api/otp/verify', { code }),
+  disable: (code: string) => post('/api/otp/disable', { code }),
+}
+export const setAlias = (name: string, alias: string) =>
+  fetch(`/api/machines/${encodeURIComponent(name)}/alias`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ alias }) })
+    .then(check).then(() => dispatchEvent(new Event('rfs:machines')))
 
 const q = (o: Record<string, string>) => new URLSearchParams(o).toString()
 const base = (m: string) => `/api/m/${encodeURIComponent(m)}/v1`

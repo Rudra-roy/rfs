@@ -44,9 +44,6 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	if budget <= 0 || budget > 20000 {
 		budget = 3000
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(budget)*time.Millisecond)
-	defer cancel()
-
 	w.Header().Set("Content-Type", "application/x-ndjson")
 	enc := json.NewEncoder(w)
 	fl, _ := w.(http.Flusher)
@@ -57,6 +54,29 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		S int64  `json:"s"`
 		M int64  `json:"m"`
 	}
+	seen := map[string]bool{}
+	indexed := false
+	var indexedAt int64
+	if x := s.index(m); x != nil && x.Ready() { // indexed: exhaustive over the last build, instant
+		hits, done := x.Search(rel, needle, limit)
+		for _, h := range hits {
+			enc.Encode(hit{P: h.Dir, N: h.Name, D: h.IsDir, S: h.Size, M: h.Mtime})
+			seen[h.Dir+"\x00"+h.Name] = true
+		}
+		if fl != nil {
+			fl.Flush()
+		}
+		indexed, indexedAt = true, x.BuiltAt().UnixMilli()
+		if !done || time.Since(x.BuiltAt()) < 5*time.Minute {
+			enc.Encode(map[string]any{"done": done, "indexed": true, "indexedAt": indexedAt, "entries": x.Len()})
+			return
+		}
+		// older index: a short shallow walk catches files created outside the agent since the last build
+		budget = min(budget, 700)
+		limit = 50
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), time.Duration(budget)*time.Millisecond)
+	defer cancel()
 	trash := filepath.ToSlash(trashRel(m))
 	fsys := root.FS()
 	queue := []string{filepath.ToSlash(rel)}
@@ -84,7 +104,7 @@ walk:
 			if dir != "." {
 				p = path.Join(dir, name)
 			}
-			if d.IsDir() && !skipDirs[name] && p != trash {
+			if d.IsDir() && !skipDirs[name] && p != trash && !(dir == "." && systemTop[name]) {
 				queue = append(queue, p)
 			}
 			if !strings.Contains(strings.ToLower(name), needle) {
@@ -94,13 +114,21 @@ walk:
 			if ierr != nil {
 				continue
 			}
-			enc.Encode(hit{P: filepath.Join(m.Path, filepath.FromSlash(dir)), N: name, D: d.IsDir(), S: info.Size(), M: info.ModTime().UnixMilli()})
+			abs := filepath.Join(m.Path, filepath.FromSlash(dir))
+			if seen[abs+"\x00"+name] {
+				continue
+			}
+			enc.Encode(hit{P: abs, N: name, D: d.IsDir(), S: info.Size(), M: info.ModTime().UnixMilli()})
 			found++
 			if found >= limit {
 				done = false
 				break walk
 			}
 		}
+	}
+	if indexed {
+		enc.Encode(map[string]any{"done": true, "indexed": true, "indexedAt": indexedAt, "walked": visited, "walkDone": done})
+		return
 	}
 	enc.Encode(map[string]any{"done": done, "visited": visited})
 }

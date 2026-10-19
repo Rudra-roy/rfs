@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { mkdirSync, writeFileSync, readFileSync, readdirSync } from 'node:fs'
 import { hostname, homedir } from 'node:os'
+import { createHmac } from 'node:crypto'
 
 // The agent runs on this machine, so fixtures are plain files on disk.
 const machine = hostname().toLowerCase()
@@ -8,14 +9,16 @@ const dir = `/tmp/rfs-e2e-${Date.now()}`
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 // a non-root drive of this machine, read from the hub; tests that need one skip otherwise
 let drive: { label: string; path: string } | undefined
-let driveCount = 0
+let driveCount = 0 // drives across every machine with an agent (the fleet bar shows all of them)
 const shots = process.env.SHOTS // directory for design-review screenshots
 const shot = async (p: Page, name: string) => { if (shots) { await p.waitForTimeout(500); await p.screenshot({ path: `${shots}/${name}.png` }) } }
 
 test.beforeAll(async () => {
   const ms = await (await fetch('http://127.0.0.1:7430/api/machines')).json() as { name: string; mounts: { label: string; path: string }[] }[]
   const me = ms.find(m => m.name === machine)
-  driveCount = me?.mounts.length ?? 0
+  driveCount = ms.reduce((a, m) => a + ((m as { agent?: boolean }).agent ? m.mounts.length : 0), 0)
+  // a previous run may have left a display name on this machine; tests assume the hostname
+  await fetch(`http://127.0.0.1:7430/api/machines/${machine}/alias`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: '{"alias":""}' })
   drive = me?.mounts.find(d => d.path !== '/')
   mkdirSync(`${dir}/sub`, { recursive: true })
   writeFileSync(`${dir}/hello.txt`, 'hello from fixture')
@@ -164,6 +167,89 @@ test('zip download and cross-machine search', async ({ page }) => {
   await expect(page).toHaveURL(`/m/${machine}${dir}`)
 })
 
+test('machine alias and pop-up preview', async ({ page }) => {
+  await page.goto('/')
+  const unit = page.locator(`.unit[data-machine="${machine}"]`)
+  await unit.hover()
+  await unit.getByRole('button', { name: /^Rename / }).click()
+  await page.getByLabel('Display name').fill('Lab box')
+  await page.getByRole('button', { name: 'Save name' }).click()
+  await expect(unit.getByText('Lab box')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Machines' }).getByText('Lab box')).toBeVisible()
+  // clear it again so other tests see the hostname
+  await unit.hover()
+  await unit.getByRole('button', { name: /^Rename / }).click()
+  await page.getByLabel('Display name').fill('')
+  await page.getByRole('button', { name: 'Save name' }).click()
+  await expect(unit.getByText(machine, { exact: true })).toBeVisible()
+
+  await page.goto(`/m/${machine}${dir}`)
+  await page.getByRole('option', { name: /^dot\.png\s/ }).click()
+  await page.getByRole('complementary').getByRole('button', { name: 'Open preview' }).click()
+  await expect(page.getByRole('dialog', { name: 'Quick Look' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await page.getByRole('option', { name: /^dot\.png\s/ }).dblclick()
+  await expect(page.getByRole('dialog', { name: 'Quick Look' })).toBeVisible()
+  await page.keyboard.press('Escape')
+})
+
+// RFC 6238 TOTP, 6 digits, SHA1, 30 s, from a base32 secret
+function totp(secretB32: string, at = Date.now()): string {
+  const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  let bits = ''
+  for (const c of secretB32.replace(/=+$/, '')) bits += alpha.indexOf(c).toString(2).padStart(5, '0')
+  const key = Buffer.from(bits.match(/.{8}/g)!.map(b => parseInt(b, 2)))
+  const step = Buffer.alloc(8); step.writeBigUInt64BE(BigInt(Math.floor(at / 1000 / 30)))
+  const h = createHmac('sha1', key).update(step).digest()
+  const off = h[h.length - 1] & 0x0f
+  return String((h.readUInt32BE(off) & 0x7fffffff) % 1_000_000).padStart(6, '0')
+}
+
+test('two-step verification: enrol, gate, verify, disable', async ({ page, context }) => {
+  await page.goto('/settings')
+  await expect(page.getByRole('heading', { name: 'Security' })).toBeVisible()
+  await page.getByRole('button', { name: /Set up with an authenticator app/ }).click()
+  const secret = (await page.locator('code').first().textContent())!.trim()
+  await expect(page.getByAltText(/QR code/)).toBeVisible()
+  await page.locator('#otp-confirm').fill(totp(secret))
+  await page.getByRole('button', { name: 'Confirm and turn on' }).click()
+  await expect(page.getByText(/^On\./)).toBeVisible()
+  // this browser got the cookie; a fresh context is gated
+  const fresh = await context.browser()!.newContext({ viewport: { width: 1280, height: 800 } })
+  const p2 = await fresh.newPage()
+  await p2.goto('/')
+  const gate = p2.getByRole('dialog', { name: 'Two-step verification' })
+  await expect(gate).toBeVisible()
+  await p2.locator('#otp-code').fill('000000')
+  await p2.getByRole('button', { name: 'Verify' }).click()
+  await expect(gate.getByRole('alert')).toBeVisible()
+  await p2.waitForTimeout(31_000) // the enrolment code's time step is burned; wait for the next
+  await p2.locator('#otp-code').fill(totp(secret))
+  await p2.getByRole('button', { name: 'Verify' }).click()
+  await expect(p2.getByRole('heading', { name: 'Rack' })).toBeVisible({ timeout: 15000 })
+  await fresh.close()
+  // disable with a fresh code so later tests run ungated
+  await page.waitForTimeout(31_000)
+  await page.getByRole('button', { name: 'Turn off' }).click()
+  await page.locator('#otp-disable').fill(totp(secret))
+  await page.getByRole('button', { name: 'Turn off' }).last().click()
+  await expect(page.getByText(/^Off\./)).toBeVisible()
+})
+
+test('machine access password', async ({ page }) => {
+  const pw = process.env.RFS_E2E_PASSWORD
+  test.skip(!pw, 'set RFS_E2E_PASSWORD to the access password of this machine')
+  await page.goto(`/m/${machine}${dir}`)
+  await page.getByLabel('Password for this machine').fill('definitely-wrong')
+  await page.getByRole('button', { name: 'Unlock' }).click()
+  await expect(page.getByRole('alert')).toContainText(/wrong/i)
+  await page.getByLabel('Password for this machine').fill(pw!)
+  await page.getByRole('button', { name: 'Unlock' }).click()
+  await expect(page.getByRole('option', { name: /^hello\.txt\s/ })).toBeVisible({ timeout: 15000 })
+  await page.getByRole('button', { name: /^Lock / }).click()
+  await expect(page).toHaveURL('/')
+})
+
 test('grid view shows thumbnails', async ({ page }) => {
   await page.goto(`/m/${machine}${dir}`)
   await page.getByRole('button', { name: 'Grid view' }).click()
@@ -208,7 +294,7 @@ test('mobile: drawer, listing, bottom sheet', async ({ browser }) => {
   await page.getByRole('button', { name: 'Show sidebar' }).click()
   await expect(page.getByRole('dialog', { name: 'Machines' })).toBeVisible()
   await shot(page, '07-mobile-drawer')
-  const first = page.getByRole('dialog').getByRole('navigation').getByRole('button', { name: /\d+%/ }).first()
+  const first = page.getByRole('dialog').locator(`[data-machine="${machine}"]`).getByRole('button', { name: /\d+%/ }).first()
   await first.click()
   await expect(page).toHaveURL(new RegExp(`/m/${machine}/`))
   await expect(page.getByRole('dialog')).toHaveCount(0)

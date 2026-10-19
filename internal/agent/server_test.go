@@ -12,7 +12,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+var servers = map[*httptest.Server]*Server{}
+
+func srvOf(t *testing.T, srv *httptest.Server) *Server {
+	s, ok := servers[srv]
+	if !ok {
+		t.Fatal("unknown test server")
+	}
+	return s
+}
 
 func newTest(t *testing.T) (string, *httptest.Server) {
 	dir := t.TempDir()
@@ -21,6 +32,7 @@ func newTest(t *testing.T) (string, *httptest.Server) {
 	os.Symlink("/etc", filepath.Join(dir, "escape"))
 	s := &Server{Mounts: func() ([]Mount, error) { return []Mount{{Path: dir, Label: "t"}}, nil }}
 	srv := httptest.NewServer(s.Handler())
+	servers[srv] = s
 	t.Cleanup(srv.Close)
 	return dir, srv
 }
@@ -154,6 +166,29 @@ func TestSearch(t *testing.T) {
 	}
 	if r, _ := do(t, "GET", srv.URL+"/v1/search?path="+dir+"&q=h", ""); r.StatusCode != 400 {
 		t.Fatalf("short q accepted: %d", r.StatusCode)
+	}
+}
+
+func TestSearchIndexedPlusFresh(t *testing.T) {
+	dir, srv := newTest(t)
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	// build the index synchronously, then create a file the index has not seen
+	s := srvOf(t, srv)
+	x := NewIndex(dir, 1000)
+	x.Rebuild()
+	x.mu.Lock()
+	x.builtAt = time.Now().Add(-10 * time.Minute) // an older index gets the live top-up walk
+	x.mu.Unlock()
+	s.mu.Lock()
+	s.indexes = map[string]*Index{dir: x}
+	s.mu.Unlock()
+	os.WriteFile(filepath.Join(dir, "sub", "hello-later.txt"), []byte("x"), 0o644)
+	_, body := do(t, "GET", srv.URL+"/v1/search?path="+dir+"&q=hello", "")
+	if strings.Count(body, `"n":"hello.txt"`) != 1 || strings.Count(body, `"n":"hello-later.txt"`) != 1 {
+		t.Fatalf("hybrid search: %s", body)
+	}
+	if !strings.Contains(body, `"indexed":true`) || !strings.Contains(body, `"done":true`) {
+		t.Fatalf("tail: %s", body)
 	}
 }
 

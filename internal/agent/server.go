@@ -42,10 +42,50 @@ var deniedPrefixes = []string{"/proc", "/sys", "/dev", "/run"}
 type Server struct {
 	ReadOnly bool
 	Mounts   func() ([]Mount, error) // injectable for tests
+	IndexMax int                     // 0 disables the filename index
+	Lock     *Lock                   // nil = no access password on this machine
 
 	mu      sync.Mutex
 	cached  []Mount
 	cacheAt time.Time
+	indexes map[string]*Index // by mount path
+}
+
+// StartIndexes builds a background filename index for every current mount.
+func (s *Server) StartIndexes() {
+	if s.IndexMax <= 0 {
+		return
+	}
+	ms, err := s.mounts()
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.indexes = map[string]*Index{}
+	for _, m := range ms {
+		x := NewIndex(m.Path, s.IndexMax)
+		s.indexes[m.Path] = x
+		x.Start()
+	}
+}
+
+func (s *Server) index(m Mount) *Index {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.indexes[m.Path]
+}
+
+// touched refreshes the index for a folder that just changed. Skips the trash
+// and anything the index would not walk; coalesces bursts per folder.
+func (s *Server) touched(m Mount, relDir string) {
+	t := trashRel(m)
+	if relDir == t || strings.HasPrefix(relDir, t+string(filepath.Separator)) {
+		return
+	}
+	if x := s.index(m); x != nil && x.Ready() {
+		x.Touch(relDir)
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -61,6 +101,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/mkdir", s.handleMkdir)
 	mux.HandleFunc("POST /v1/mv", s.handleMv)
 	mux.HandleFunc("POST /v1/rm", s.handleRm)
+	if s.Lock != nil {
+		return s.Lock.Middleware(mux)
+	}
 	return mux
 }
 
@@ -207,7 +250,7 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 		fail(w, errForbidden("read-only agent"))
 		return
 	}
-	_, root, rel, err := s.resolve(r.URL.Query().Get("path"))
+	m, root, rel, err := s.resolve(r.URL.Query().Get("path"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -238,6 +281,9 @@ func (s *Server) handlePut(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if off == 0 { // a new file; later chunks only change its size, which the next rebuild picks up
+		s.touched(m, filepath.Dir(rel))
+	}
 	writeJSON(w, map[string]int64{"size": off + n})
 }
 
@@ -246,7 +292,7 @@ func (s *Server) handleMkdir(w http.ResponseWriter, r *http.Request) {
 		fail(w, errForbidden("read-only agent"))
 		return
 	}
-	_, root, rel, err := s.resolve(r.URL.Query().Get("path"))
+	m, root, rel, err := s.resolve(r.URL.Query().Get("path"))
 	if err != nil {
 		fail(w, err)
 		return
@@ -256,6 +302,7 @@ func (s *Server) handleMkdir(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	s.touched(m, filepath.Dir(rel))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -285,6 +332,13 @@ func (s *Server) handleMv(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if x := s.index(m1); x != nil {
+		x.DropTree(from)
+	}
+	s.touched(m1, filepath.Dir(from))
+	if filepath.Dir(to) != filepath.Dir(from) {
+		s.touched(m1, filepath.Dir(to))
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -311,6 +365,7 @@ func (s *Server) handleRm(w http.ResponseWriter, r *http.Request) {
 			fail(w, err)
 			return
 		}
+		s.touched(m, filepath.Dir(rel))
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -323,6 +378,10 @@ func (s *Server) handleRm(w http.ResponseWriter, r *http.Request) {
 		fail(w, err)
 		return
 	}
+	if x := s.index(m); x != nil {
+		x.DropTree(rel)
+	}
+	s.touched(m, filepath.Dir(rel))
 	writeJSON(w, map[string]string{"trash": dest})
 }
 

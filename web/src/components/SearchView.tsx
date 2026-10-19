@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { File, FileArchive, FileCode2, FileSearch, FileText, Film, Folder, Image as ImageIcon, Music } from 'lucide-react'
-import { search, type Coverage, type Hit } from '../api'
+import { label, search, type Coverage, type Hit, type Machine } from '../api'
 import { bytes, hueOf, kind, kindColor, when, type Kind } from '../format'
 import { join, navigate } from '../route'
 import { Empty, MachineMark, Skeleton, cx } from './ui'
@@ -8,7 +8,8 @@ import { Empty, MachineMark, Skeleton, cx } from './ui'
 const icons: Record<Kind | 'dir', typeof File> = { dir: Folder, image: ImageIcon, video: Film, audio: Music, pdf: FileText, text: FileText, code: FileCode2, archive: FileArchive, other: File }
 
 // Results of a cross-machine filename search, streamed in as agents answer.
-export function SearchView({ q }: { q: string }) {
+export function SearchView({ q, machines }: { q: string; machines: Machine[] }) {
+  const name = (n: string) => label(machines.find(m => m.name === n) ?? { name: n })
   const [hits, setHits] = useState<Hit[]>([])
   const [cov, setCov] = useState<Coverage[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,8 +49,8 @@ export function SearchView({ q }: { q: string }) {
                     <span className="min-w-0">
                       <span className="block truncate">{h.n}</span>
                       <span className="flex items-center gap-1.5 text-[12px] text-muted min-w-0">
-                        <MachineMark name={h.machine} hue={hueOf(h.machine)} size="sm" />
-                        <span className="font-mono truncate">{h.machine}:{h.p}</span>
+                        <MachineMark name={name(h.machine)} hue={hueOf(h.machine)} size="sm" />
+                        <span className="font-mono truncate">{name(h.machine)}:{h.p}</span>
                       </span>
                     </span>
                     <span className="text-right text-muted text-[13px] tabular-nums max-sm:hidden">{h.d ? '—' : bytes(h.s)}</span>

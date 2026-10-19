@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Clock, FileSearch, HardDrive, Pin, Search, Terminal } from 'lucide-react'
-import type { Machine } from '../api'
+import { label, type Machine } from '../api'
 import { hueOf } from '../format'
 import { navigate, navigateSearch, tail } from '../route'
 import { useLocs } from '../prefs'
@@ -29,14 +29,15 @@ export function GoTo({ machines, onPick, autoFocus }: { machines: Machine[]; onP
     const all: Item[] = [
       ...pinned.map(p => ({ key: 'p' + p.machine + p.path, icon: 'pin' as const, label: tail(p.path), sub: `${p.machine}:${p.path}`, machine: p.machine, path: p.path })),
       ...recent.map(r => ({ key: 'r' + r.machine + r.path, icon: 'recent' as const, label: tail(r.path), sub: `${r.machine}:${r.path}`, machine: r.machine, path: r.path })),
-      ...live.flatMap(m => m.mounts.map(d => ({ key: 'd' + m.name + d.path, icon: 'drive' as const, label: d.label, sub: `${m.name}:${d.path}`, machine: m.name, path: d.path }))),
+      ...live.flatMap(m => m.mounts.map(d => ({ key: 'd' + m.name + d.path, icon: 'drive' as const, label: d.label, sub: `${label(m)}:${d.path}`, machine: m.name, path: d.path }))),
     ]
     const seen = new Set<string>()
     const uniq = all.filter(i => { const k = i.machine + i.path; if (seen.has(k)) return false; seen.add(k); return true })
     const hits = needle ? uniq.filter(i => (i.label + ' ' + i.sub).toLowerCase().includes(needle)) : uniq
     const lit = /^([^:]+):(.+)$/.exec(q.trim())
     if (lit) {
-      const m = live.find(x => x.name === lit[1].toLowerCase()) ?? live.find(x => x.name.startsWith(lit[1].toLowerCase()))
+      const want = lit[1].toLowerCase()
+      const m = live.find(x => x.name === want || label(x).toLowerCase() === want) ?? live.find(x => x.name.startsWith(want) || label(x).toLowerCase().startsWith(want))
       if (m) hits.unshift({ key: 'lit', icon: 'literal', label: lit[2], sub: `open on ${m.name}`, machine: m.name, path: lit[2] })
     }
     const out = hits.slice(0, 7)
@@ -75,7 +76,7 @@ export function GoTo({ machines, onPick, autoFocus }: { machines: Machine[]; onP
             <li key={i.key} role="option" aria-selected={n === idx} onMouseDown={e => { e.preventDefault(); go(i) }} onMouseEnter={() => setIdx(n)}
               className={cx('flex items-center gap-2.5 h-9 px-2 rounded-sm cursor-default text-[13px]', n === idx ? 'bg-accent-dim' : '')}>
               <span className="text-muted"><Ico k={i.icon} /></span>
-              {i.machine && <MachineMark name={i.machine} hue={hueOf(i.machine)} size="sm" />}
+              {i.machine && <MachineMark name={label(machines.find(m => m.name === i.machine) ?? { name: i.machine })} hue={hueOf(i.machine)} size="sm" />}
               <span className="truncate">{i.label}</span>
               <span className="ml-auto truncate text-faint font-mono text-[11px] max-w-[55%]">{i.sub}</span>
             </li>

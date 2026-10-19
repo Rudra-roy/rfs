@@ -30,7 +30,7 @@ export function useListing(machine: string, path: string, nonce: number) {
     setRows(cache.get(key) ?? []); setLoading(!cache.has(key)); setError(undefined)
     ls(machine, path, ac.signal, setRows)
       .then(all => { cache.set(key, all); setRows(all) })
-      .catch(e => { if (e.name !== 'AbortError') setError(e.message) })
+      .catch(e => { if (e.name !== 'AbortError') { setError(e.message); if (e.status === 401) dispatchEvent(new Event('rfs:machines')) } })
       .finally(() => { if (!ac.signal.aborted) setLoading(false) })
     return () => ac.abort()
   }, [key, nonce])
@@ -163,7 +163,7 @@ export function Listing(p: Props) {
   if (!loading && sorted.length === 0)
     return <div className="h-full" {...drop}><Empty icon={<Upload />} title="Empty folder" body="Drop files here or use Upload in the bar above." /></div>
 
-  const common = { sorted, selected: selection.names, focus: selection.focus, click, loading, machine, path, sort, onSort }
+  const common = { sorted, selected: selection.names, focus: selection.focus, click, dbl: onQuickLook, loading, machine, path, sort, onSort }
   return (
     <div className={cx('relative h-full', over && 'after:absolute after:inset-2 after:rounded-md after:border-2 after:border-dashed after:border-accent after:bg-accent-dim after:pointer-events-none')} {...drop}>
       {view === 'grid' ? <Grid {...common} onKey={onKey} /> : <Rows {...common} onKey={onKey} />}
@@ -172,7 +172,7 @@ export function Listing(p: Props) {
 }
 
 type InnerProps = {
-  sorted: Entry[]; selected: Set<string>; focus: string | null; click: (e: Entry, ev: React.MouseEvent) => void
+  sorted: Entry[]; selected: Set<string>; focus: string | null; click: (e: Entry, ev: React.MouseEvent) => void; dbl: (e: Entry) => void
   loading: boolean; machine: string; path: string; sort: Sort; onSort: (s: Sort) => void; onKey: (ev: React.KeyboardEvent, cols: number) => void
 }
 
@@ -186,7 +186,7 @@ function Head({ k, sort, onSort, children, className }: { k: Sort['key']; sort: 
   )
 }
 
-function Rows({ sorted, selected, focus, click, loading, machine, path, sort, onSort, onKey }: InnerProps) {
+function Rows({ sorted, selected, focus, click, dbl, loading, machine, path, sort, onSort, onKey }: InnerProps) {
   const box = useRef<HTMLDivElement>(null)
   const v = useVirtualizer({ count: sorted.length, getScrollElement: () => box.current, estimateSize: () => 36, overscan: 16 })
   useEffect(() => { if (focus) { const i = sorted.findIndex(e => e.n === focus); if (i >= 0) v.scrollToIndex(i) } }, [focus])
@@ -201,7 +201,7 @@ function Rows({ sorted, selected, focus, click, loading, machine, path, sort, on
         {v.getVirtualItems().map(row => {
           const e = sorted[row.index], sel = selected.has(e.n)
           return (
-            <div key={e.n} role="option" aria-selected={sel} onClick={ev => click(e, ev)}
+            <div key={e.n} role="option" aria-selected={sel} onClick={ev => click(e, ev)} onDoubleClick={() => !e.d && dbl(e)}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: row.size, transform: `translateY(${row.start}px)` }}
               className={cx('group grid grid-cols-[1fr_5.5rem_7rem] max-sm:grid-cols-[1fr_5rem] gap-4 px-4 items-center select-none border-b border-line/60',
                 sel ? 'bg-selection shadow-[inset_2px_0_0_var(--color-accent)]' : 'hover:bg-surface', focus === e.n && !sel && 'bg-surface')}>
@@ -223,7 +223,7 @@ function Rows({ sorted, selected, focus, click, loading, machine, path, sort, on
   )
 }
 
-function Grid({ sorted, selected, focus, click, machine, path, onKey }: InnerProps) {
+function Grid({ sorted, selected, focus, click, dbl, machine, path, onKey }: InnerProps) {
   const box = useRef<HTMLDivElement>(null)
   const [cols, setCols] = useState(4)
   useEffect(() => {
@@ -244,7 +244,7 @@ function Grid({ sorted, selected, focus, click, machine, path, onKey }: InnerPro
             {sorted.slice(row.index * cols, row.index * cols + cols).map(e => {
               const sel = selected.has(e.n), k = e.d ? 'dir' : kind(e.n), thumb = k === 'image' || k === 'video'
               return (
-                <div key={e.n} role="option" aria-selected={sel} onClick={ev => click(e, ev)}
+                <div key={e.n} role="option" aria-selected={sel} onClick={ev => click(e, ev)} onDoubleClick={() => !e.d && dbl(e)}
                   className={cx('press group rounded-md border p-2 select-none transition-colors', sel ? 'bg-selection ring-2 ring-accent border-transparent' : 'border-transparent hover:bg-surface hover:border-line')}>
                   <div data-kind={slot(e)} className={cx('aspect-[4/3] rounded-sm grid place-items-center overflow-hidden relative', thumb ? 'bg-surface-2' : 'bg-kind-dim')}>
                     {thumb

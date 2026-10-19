@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { HardDrive, Server } from 'lucide-react'
-import { me, type Machine, type Mount } from '../api'
+import { Check, HardDrive, Lock, Pencil, Server, X } from 'lucide-react'
+import { isLocked, label, me, setAlias, type Machine, type Mount } from '../api'
 import { bytes, hueOf } from '../format'
 import { navigate } from '../route'
-import { Button, Empty, Led, MachineMark, cx } from './ui'
+import { Button, Empty, IconButton, Led, MachineMark, TextInput, cx } from './ui'
 import { stateOf, status } from './Sidebar'
 
 type Drive = { m: Machine; d: Mount }
@@ -63,8 +63,8 @@ export function Landing({ machines, error }: { machines: Machine[]; error?: stri
               <ul className="grid sm:grid-cols-2 gap-1.5 mt-1.5">
                 {rest.map(m => (
                   <li key={m.name} className="slot flex items-center gap-2.5 px-3 h-11 text-[13px]">
-                    <MachineMark name={m.name} hue={hueOf(m.name)} size="sm" />
-                    <span className="truncate text-fg/80">{m.name}</span>
+                    <MachineMark name={label(m)} hue={hueOf(m.name)} size="sm" />
+                    <span className="truncate text-fg/80">{label(m)}</span>
                     <Led state={stateOf(m)} />
                     <span className="text-muted truncate">{m.os}, {status(m)}</span>
                   </li>
@@ -105,15 +105,32 @@ function FleetBar({ drives }: { drives: Drive[] }) {
   )
 }
 
-// A rack unit: the machine on the left, its drive bays on the right.
+// A rack unit: the machine on the left, its drive bays on the right. The name is renamable on the site.
 function Unit({ m }: { m: Machine }) {
+  const [edit, setEdit] = useState(false)
+  const [v, setV] = useState('')
+  const [err, setErr] = useState<string>()
+  const save = () => setAlias(m.name, v.trim()).then(() => { setEdit(false); setErr(undefined) }).catch(e => setErr(e.message))
   return (
-    <div data-hue={hueOf(m.name)} className="unit grid sm:grid-cols-[15rem_1fr] min-w-0">
-      <div className="flex items-center gap-3 px-4 py-4 sm:border-r border-line/70">
-        <MachineMark name={m.name} hue={hueOf(m.name)} size="lg" />
-        <div className="min-w-0">
-          <div className="font-medium text-[16px] leading-tight truncate">{m.name}</div>
-          <div className="text-muted text-[13px] mt-0.5 flex items-center gap-2"><span className="led-bezel"><Led state="agent" /></span> {m.os}, {m.mounts.length} {m.mounts.length === 1 ? 'drive' : 'drives'}</div>
+    <div data-hue={hueOf(m.name)} data-machine={m.name} className="unit grid sm:grid-cols-[17rem_1fr] min-w-0">
+      <div className="flex items-center gap-3 px-4 py-4 sm:border-r border-line/70 group/unit">
+        <MachineMark name={label(m)} hue={hueOf(m.name)} size="lg" />
+        <div className="min-w-0 flex-1">
+          {edit ? (
+            <form onSubmit={e => { e.preventDefault(); save() }} className="flex items-center gap-1 animate-pop">
+              <TextInput autoFocus value={v} onChange={e => setV(e.target.value)} aria-label="Display name" placeholder={m.name} maxLength={40} className="h-8 text-[14px]"
+                onKeyDown={e => e.key === 'Escape' && setEdit(false)} />
+              <IconButton label="Save name" type="submit" className="size-8 text-accent"><Check /></IconButton>
+              <IconButton label="Cancel" type="button" onClick={() => setEdit(false)} className="size-8"><X /></IconButton>
+            </form>
+          ) : (
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="font-medium text-[16px] leading-tight truncate" title={m.alias ? `${m.alias} (${m.name})` : m.name}>{label(m)}</span>
+              <IconButton label={`Rename ${label(m)}`} onClick={() => { setV(m.alias ?? ''); setEdit(true) }} className="size-7 opacity-0 group-hover/unit:opacity-100 focus-visible:opacity-100 transition-opacity"><Pencil className="!size-3.5" /></IconButton>
+            </div>
+          )}
+          {err && <div role="alert" className="text-danger text-[12px]">{err}</div>}
+          <div className="text-muted text-[13px] mt-0.5 flex items-center gap-2"><span className="led-bezel"><Led state="agent" /></span> {m.os}, {m.mounts.length} {m.mounts.length === 1 ? 'drive' : 'drives'}{isLocked(m) && <span className="inline-flex items-center gap-1"><Lock className="size-3.5" aria-hidden /> locked</span>}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 p-3 sm:justify-end items-center min-w-0">

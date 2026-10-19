@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, Eye, EyeOff, HardDrive, LayoutGrid, List, PanelLeft, PanelRight, Pencil, Pin } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye, EyeOff, HardDrive, LayoutGrid, List, Lock, LockOpen, PanelLeft, PanelRight, Pencil, Pin, Settings as SettingsIcon } from 'lucide-react'
 import { Mark } from './Mark'
-import type { Machine } from '../api'
-import { crumbs, navigate } from '../route'
+import { isLocked, label, lock, type Machine } from '../api'
+import { crumbs, navigate, navigateTo } from '../route'
 import { useBusy } from '../transfers'
 import { Button, IconButton, Led, MachineMark, Menu, MenuItem, TextInput, cx } from './ui'
 import { bytes, hueOf } from '../format'
@@ -16,9 +16,10 @@ type Props = {
   hidden: boolean; onHidden: (v: boolean) => void
   sidebar: boolean; onSidebar: () => void
   details: boolean; onDetails: () => void
+  settings?: boolean
 }
 
-export function TopBar({ machines, machine, path, view, onView, hidden, onHidden, sidebar, onSidebar, details, onDetails }: Props) {
+export function TopBar({ machines, machine, path, view, onView, hidden, onHidden, sidebar, onSidebar, details, onDetails, settings }: Props) {
   const cur = machines.find(m => m.name === machine)
   const wide = useMedia('(min-width: 40rem)')
   const mount = cur?.mounts.find(d => path === d.path || path.startsWith(d.path.endsWith('/') ? d.path : d.path + '/'))
@@ -32,7 +33,8 @@ export function TopBar({ machines, machine, path, view, onView, hidden, onHidden
           <span className="hidden xl:inline font-semibold tracking-tight text-[15px]">files</span>
         </a>
         <DriveSwitch machines={machines} current={cur} />
-        {wide && cur && <Crumbs machine={cur} path={path} mount={mount?.path} />}
+        {wide && cur && !isLocked(cur) && <Crumbs machine={cur} path={path} mount={mount?.path} />}
+        {cur?.locked && cur.unlocked && <IconButton label={`Lock ${label(cur)}`} onClick={() => lock(cur.name).then(() => navigate(null))} className="shrink-0"><LockOpen /></IconButton>}
         <div className="ml-auto flex items-center gap-0.5">
           <IconButton label={hidden ? 'Hide hidden files' : 'Show hidden files'} active={hidden} onClick={() => onHidden(!hidden)} className="hidden sm:grid">
             {hidden ? <Eye /> : <EyeOff />}
@@ -42,9 +44,10 @@ export function TopBar({ machines, machine, path, view, onView, hidden, onHidden
             <IconButton label="Grid view" active={view === 'grid'} onClick={() => onView('grid')} className="size-8"><LayoutGrid /></IconButton>
           </div>
           {cur && <IconButton label={details ? 'Hide details' : 'Show details'} active={details} onClick={onDetails} className="hidden lg:grid"><PanelRight /></IconButton>}
+          <IconButton label="Security settings" active={settings} onClick={() => navigateTo('/settings')}><SettingsIcon /></IconButton>
         </div>
       </div>
-      {!wide && cur && <div className="h-10 flex items-center px-2 border-t border-line/60"><Crumbs machine={cur} path={path} mount={mount?.path} /></div>}
+      {!wide && cur && !isLocked(cur) && <div className="h-10 flex items-center px-2 border-t border-line/60"><Crumbs machine={cur} path={path} mount={mount?.path} /></div>}
     </header>
   )
 }
@@ -56,8 +59,8 @@ function DriveSwitch({ machines, current }: { machines: Machine[]; current?: Mac
   return (
     <Menu trigger={open => (
       <Button variant="ghost" className={cx('px-2 max-w-44 sm:max-w-56', open && 'bg-surface-2 text-fg')} aria-haspopup="menu" aria-expanded={open}>
-        {current ? <MachineMark name={current.name} hue={hueOf(current.name)} size="sm" /> : <HardDrive className="size-4 text-muted" />}
-        <span className="truncate font-medium text-fg">{current?.name ?? 'Open a drive'}</span>
+        {current ? <MachineMark name={label(current)} hue={hueOf(current.name)} size="sm" /> : <HardDrive className="size-4 text-muted" />}
+        <span className="truncate font-medium text-fg">{current ? label(current) : 'Open a drive'}</span>
         {current && <Led state={current.agent ? 'agent' : current.online ? 'online' : 'offline'} busy={busy} />}
         <ChevronDown className={cx('size-4 text-muted transition-transform', open && 'rotate-180')} />
       </Button>
@@ -67,8 +70,9 @@ function DriveSwitch({ machines, current }: { machines: Machine[]; current?: Mac
         : live.map(m => (
           <div key={m.name} className="py-1">
             <MenuItem onClick={() => { close(); if (m.mounts[0]) navigate(m.name, m.mounts[0].path) }} className="h-8">
-              <MachineMark name={m.name} hue={hueOf(m.name)} size="sm" />
-              <span className="font-medium">{m.name}</span>
+              <MachineMark name={label(m)} hue={hueOf(m.name)} size="sm" />
+              <span className="font-medium">{label(m)}</span>
+              {isLocked(m) && <Lock className="size-3.5 text-muted" aria-label="locked" />}
               <span className="ml-auto text-[11px] font-mono text-faint">{m.mounts.length} {m.mounts.length === 1 ? 'drive' : 'drives'}</span>
             </MenuItem>
             {m.mounts.map(d => (

@@ -41,6 +41,11 @@ build_from_source() {
 
 if [ "${RFS_BUILD:-}" = "1" ] || ! fetch_release; then build_from_source; fi
 
+# access password: asked once, interactively, when none is set yet
+if [ -t 0 ] && [ ! -f "${RFS_PASSFILE:-$HOME/.config/rfs/agent.pass}" ] && [ "${RFS_NO_PASSWORD:-}" != "1" ]; then
+  echo "Set an access password for this machine. Anyone browsing it through the hub must enter it first. Leave empty for none."
+  ~/.local/bin/rfs-agent -set-password || true
+fi
 sed "s|ExecStart=%h/.local/bin/rfs-agent|ExecStart=%h/.local/bin/rfs-agent $*|" deploy/rfs-agent.service > ~/.config/systemd/user/rfs-agent.service
 systemctl --user daemon-reload
 systemctl --user enable --now rfs-agent

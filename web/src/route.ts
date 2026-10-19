@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { pushRecent } from './prefs'
 
-export type Route = { machine: string; path: string; select?: string } | { machine: null; path: ''; q?: string }
+export type Route = { machine: string; path: string; select?: string } | { machine: null; path: ''; q?: string; settings?: boolean }
 
 const isWin = (p: string) => /^[A-Za-z]:/.test(p)
 
@@ -13,6 +13,7 @@ export function toURL(machine: string, path: string): string {
 
 function parse(pathname: string): Route {
   if (pathname === '/search') return { machine: null, path: '', q: new URLSearchParams(location.search).get('q') ?? '' }
+  if (pathname === '/settings') return { machine: null, path: '', settings: true }
   const m = /^\/m\/([^/]+)(\/.*)?$/.exec(pathname)
   if (!m) return { machine: null, path: '' }
   let p = (m[2] ?? '/').split('/').map(decodeURIComponent).join('/')
@@ -52,6 +53,11 @@ export function useRoute(): Route {
   // every folder you view becomes a recent, however you got there
   useEffect(() => { if (r.machine) pushRecent(r.machine, r.path) }, [r.machine, r.path])
   return r
+}
+
+export function navigateTo(pathname: string) {
+  history.pushState(null, '', pathname)
+  dispatchEvent(new PopStateEvent('popstate'))
 }
 
 export function navigateSearch(q: string) {

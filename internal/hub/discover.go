@@ -17,12 +17,15 @@ import (
 
 // Machine is one tailnet node owned by us, with or without a running agent.
 type Machine struct {
-	Name     string        `json:"name"` // lowercase hostname, used in URLs
+	Name     string        `json:"name"`            // lowercase hostname, used in URLs
+	Alias    string        `json:"alias,omitempty"` // display name set on the site
 	IP       string        `json:"ip"`
 	Port     string        `json:"port,omitempty"` // agent port override (demo fleets); empty = default
 	OS       string        `json:"os"`
-	Online   bool          `json:"online"` // tailscale says reachable
-	Agent    bool          `json:"agent"`  // agent answered on the last poll
+	Online   bool          `json:"online"`   // tailscale says reachable
+	Agent    bool          `json:"agent"`    // agent answered on the last poll
+	Locked   bool          `json:"locked"`   // agent has an access password
+	Unlocked bool          `json:"unlocked"` // this user holds a live token (filled per request)
 	LastSeen time.Time     `json:"lastSeen"`
 	Mounts   []agent.Mount `json:"mounts"`
 }
@@ -111,10 +114,24 @@ func (r *Registry) poll() {
 			var mounts []agent.Mount
 			ok := false
 			if n.Online {
+				locked := false
 				if resp, err := r.client.Get("http://" + net.JoinHostPort(ip, r.port) + "/v1/mounts"); err == nil {
 					ok = resp.StatusCode == 200 && json.NewDecoder(resp.Body).Decode(&mounts) == nil
+					locked = resp.Header.Get("X-Rfs-Locked") == "1"
 					resp.Body.Close()
 				}
+				r.mu.Lock()
+				m, exists := r.machines[name]
+				if !exists {
+					m = &Machine{Name: name, Mounts: []agent.Mount{}}
+					r.machines[name] = m
+				}
+				m.IP, m.OS, m.Online, m.Agent, m.Locked = ip, n.OS, n.Online, ok, locked
+				if ok {
+					m.Mounts, m.LastSeen = mounts, time.Now()
+				}
+				r.mu.Unlock()
+				return
 			}
 			r.mu.Lock()
 			m, exists := r.machines[name]
@@ -144,12 +161,14 @@ func (r *Registry) pollStatic() {
 	for _, m := range targets {
 		var mounts []agent.Mount
 		ok := false
+		locked := false
 		if resp, err := r.client.Get("http://" + m.Addr(r.port) + "/v1/mounts"); err == nil {
 			ok = resp.StatusCode == 200 && json.NewDecoder(resp.Body).Decode(&mounts) == nil
+			locked = resp.Header.Get("X-Rfs-Locked") == "1"
 			resp.Body.Close()
 		}
 		r.mu.Lock()
-		m.Online, m.Agent = ok, ok
+		m.Online, m.Agent, m.Locked = ok, ok, locked
 		if ok {
 			m.Mounts, m.LastSeen = mounts, time.Now()
 		}

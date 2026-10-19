@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -36,7 +37,7 @@ func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) {
 	}
 	names := q["name"]
 	for _, n := range names {
-		if n == "" || n != filepath.Base(n) {
+		if n == "" || n == "." || n == ".." || n != filepath.Base(n) {
 			fail(w, errBad("bad name"))
 			return
 		}
@@ -76,6 +77,12 @@ func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) {
 		if !info.Mode().IsRegular() {
 			return nil
 		}
+		f, err := fsys.Open(p)
+		if err != nil {
+			log.Printf("zip: skipping %s: %v", p, err) // omitted, not written as an empty entry
+			return nil
+		}
+		defer f.Close()
 		hdr, _ := zip.FileInfoHeader(info)
 		hdr.Name = name
 		hdr.Method = zip.Deflate
@@ -86,11 +93,6 @@ func (s *Server) handleZip(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		f, err := fsys.Open(p)
-		if err != nil {
-			return nil
-		}
-		defer f.Close()
 		_, err = io.Copy(out, f)
 		return err
 	}

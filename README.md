@@ -38,7 +38,7 @@ Access from outside your network goes through a Cloudflare Tunnel with Cloudflar
 
 **Navigate**
 - Go to box on `/` or Ctrl-K: machines, drives, pinned and recent folders, or a literal `machine:/path`.
-- Filename search across every drive of every machine, streamed as agents answer, breadth-first so shallow hits arrive first. A hit opens its folder with the file selected.
+- Filename search across every drive of every machine in milliseconds: each agent keeps a compact index per drive (a million entries scan in about 4 ms), persisted so restarts are instant, refreshed per folder on every write through the agent, rebuilt on a schedule scaled to the drive, and topped up by a short live walk so files created outside the agent still show. A hit opens its folder with the file selected.
 - Breadcrumb chips, an editable location line, and a pin button on any folder.
 - A drive switcher that works from any page, and a sidebar you can collapse.
 
@@ -51,7 +51,12 @@ Access from outside your network goes through a Cloudflare Tunnel with Cloudflar
 **Fleet**
 - The landing page is a rack: one capacity bar for the whole fleet, each machine as a unit with its drives as sleds, LEDs for status, and empty slots for machines without an agent.
 - Capacity turns orange above 70 percent and red above 90.
-- Machines get a stable identity colour so you can tell a drive on one box from a drive on another at a glance.
+- Machines get a stable identity colour so you can tell a drive on one box from a drive on another at a glance, and you can give any machine a display name on the site without touching the tailnet.
+
+**Locked down, in layers**
+- Sign-in at the edge through Cloudflare Access with your identity provider and an email allowlist. The hub re-checks the signed token on every request.
+- Optional two-step verification owned by the hub: enrol an authenticator app from Security settings, and every new browser must enter a code.
+- Optional access password per machine, set on the machine and checked by the machine. The hub holds only a 12-hour unlock token, so even a compromised hub cannot read a locked machine.
 
 **Built right**
 - Streams everything. Directory listings paint as they arrive; file reads use `sendfile` with range support so video seeks are instant.
@@ -94,7 +99,7 @@ Two static binaries from one Go module. The hub embeds the built React app. Addi
 
 | Component | Does |
 |---|---|
-| `rfs-agent` | Enumerates mounts, serves list, stat, ranged read, chunked upload, rename, trash, thumbnails, zip, filename search. Authorises callers with Tailscale `whois`. Flags: `-readonly`, `-mounts /a:Label,/b:Other`, `-port`. |
+| `rfs-agent` | Enumerates mounts, serves list, stat, ranged read, chunked upload, rename, trash, thumbnails, zip, indexed filename search. Authorises callers with Tailscale `whois` and, if set, a per-machine access password. Flags: `-readonly`, `-mounts /a:Label,/b:Other`, `-port`, `-index-max` (entries per drive, 0 disables), `-set-password`, `-passfile`. |
 | `rfs-hub` | Serves the SPA, validates Cloudflare Access tokens, polls the tailnet for agents, reverse-proxies file calls with keep-alive and streaming, fans search out to every drive, writes the audit log. Flags: `-addr`, `-agent-port`, `-audit` (or `RFS_AUDIT_LOG`), `-dev-email` (loopback only), `-demo-fleet`. |
 
 ## Quick start
@@ -137,7 +142,7 @@ Open the hostname from a phone on mobile data. You should see your identity prov
 
 ## Security model
 
-In one paragraph: the only public surface is Cloudflare, which authenticates you before any byte reaches the hub; the hub re-checks the signed Access token on every request and binds loopback; agents bind the tailnet address and accept only your own Tailscale identity; every path is opened through `os.OpenRoot` so traversal and symlink escapes fail; `/proc`, `/sys`, `/dev` and `/run` are never served; delete is a move to trash; the system service runs without root. Details and the deliberate non-goals are in [SECURITY.md](SECURITY.md).
+In one paragraph: the only public surface is Cloudflare, which authenticates you before any byte reaches the hub; the hub re-checks the signed Access token on every request, can demand a TOTP code per device, and binds loopback; agents bind the tailnet address, accept only your own Tailscale identity, and can each require their own access password that the hub never stores; every path is opened through `os.OpenRoot` so traversal and symlink escapes fail; `/proc`, `/sys`, `/dev` and `/run` are never served; delete is a move to trash; the system service runs without root. Details and the deliberate non-goals are in [SECURITY.md](SECURITY.md).
 
 ## Demo
 
@@ -162,10 +167,10 @@ The palette lives in `web/src/palette.json`. Apply it with `node scripts/apply-p
 
 ## Roadmap
 
-- Indexed search with change notifications, for drives too large to walk within the time budget
+- Change notifications for the search index on filesystems that support them cheaply
 - Tailnet-direct fast path that skips Cloudflare when the browser is already on the tailnet
 - Remux for MKV and HEVC in the browser
-- Passkey step-up before destructive actions
+- Passkeys as an alternative second factor
 
 The original plan with decisions and phase checks is in [PLAN.md](PLAN.md).
 

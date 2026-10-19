@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Download, Pencil, Pin, Trash2 } from 'lucide-react'
-import { fileURL, mv, rm, zipURL, type Entry } from '../api'
-import { bytes, when } from '../format'
+import { Download, Maximize2, Pencil, Pin, Trash2 } from 'lucide-react'
+import { fileURL, mv, rm, thumbURL, zipURL, type Entry } from '../api'
+import { bytes, kind, when } from '../format'
 import { join } from '../route'
 import { isPinned, togglePin, useLocs } from '../prefs'
 import { Preview } from './Preview'
 import { Button, TextInput, cx } from './ui'
 
-type Props = { machine: string; path: string; selected: Entry[]; count: number; onChanged: () => void; onClose: () => void }
+type Props = { machine: string; path: string; selected: Entry[]; count: number; onChanged: () => void; onClose: () => void; onOpen: (e: Entry) => void }
 
 // Details pane: one entry, a multi-selection summary, or the current folder.
 export function Inspector(p: Props) {
@@ -42,8 +42,9 @@ function Inline({ initial, onDone, onCancel, label }: { initial: string; onDone:
 const Title = ({ children, mono }: { children: string; mono?: boolean }) =>
   <h2 className={cx('font-medium break-all leading-snug', mono ? 'font-mono text-[13px] text-muted' : 'text-[15px]')}>{children}</h2>
 
-function EntryView({ machine, path, entry, onChanged, onClose }: Props & { entry: Entry }) {
+function EntryView({ machine, path, entry, onChanged, onClose, onOpen }: Props & { entry: Entry }) {
   const full = join(path, entry.n)
+  const k = kind(entry.n), popup = k === 'image' || k === 'video' || k === 'pdf'
   const [mode, setMode] = useState<'view' | 'rename' | 'confirm'>('view')
   const [err, setErr] = useState<string>()
   useEffect(() => { setMode('view'); setErr(undefined) }, [machine, full])
@@ -51,7 +52,17 @@ function EntryView({ machine, path, entry, onChanged, onClose }: Props & { entry
   return (
     <>
       <Title>{entry.n}</Title>
-      {!entry.d && <div className="rounded-md overflow-hidden bg-surface-2 border border-line grid place-items-center min-h-28"><Preview machine={machine} path={full} name={entry.n} /></div>}
+      {!entry.d && (popup
+        ? <button onClick={() => onOpen(entry)} aria-label={`Open ${entry.n} in the preview window`}
+            className="press group relative rounded-md overflow-hidden bg-surface-2 border border-line hover:border-line-strong aspect-[4/3] grid place-items-center">
+            {k === 'pdf'
+              ? <span className="text-muted text-[13px]">PDF</span>
+              : <img src={thumbURL(machine, full, entry.m)} alt="" className="size-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />}
+            <span className="absolute inset-0 grid place-items-center bg-black/0 group-hover:bg-black/30 transition-colors">
+              <span className="inline-flex items-center gap-2 h-9 px-3 rounded-sm bg-bg/85 border border-line-strong text-[13px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"><Maximize2 className="size-4" /> Open preview</span>
+            </span>
+          </button>
+        : <div className="rounded-md overflow-hidden bg-surface-2 border border-line grid place-items-center min-h-28"><Preview machine={machine} path={full} name={entry.n} /></div>)}
       <div className="space-y-1.5">
         {!entry.d && <Row k="Size" v={bytes(entry.s)} />}
         <Row k="Modified" v={when(entry.m)} />
@@ -59,7 +70,8 @@ function EntryView({ machine, path, entry, onChanged, onClose }: Props & { entry
       </div>
       {mode === 'view' && (
         <div className="flex flex-wrap gap-2">
-          <a href={entry.d ? zipURL(machine, full) : fileURL(machine, full, true)} download className="press inline-flex items-center gap-2 h-9 px-3 rounded-sm bg-accent text-accent-fg font-medium text-[14px] hover:bg-accent/90">
+          {popup && <Button variant="solid" icon={<Maximize2 />} onClick={() => onOpen(entry)}>Open preview</Button>}
+          <a href={entry.d ? zipURL(machine, full) : fileURL(machine, full, true)} download className={cx('press inline-flex items-center gap-2 h-9 px-3 rounded-sm font-medium text-[14px]', popup ? 'border border-line-strong bg-surface hover:bg-surface-2' : 'bg-accent text-accent-fg hover:bg-accent/90')}>
             <Download className="size-4" aria-hidden /> {entry.d ? 'Download zip' : 'Download'}
           </a>
           <Button icon={<Pencil />} onClick={() => setMode('rename')}>Rename</Button>

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Info } from 'lucide-react'
-import { machines as fetchMachines, upload, type Entry, type Machine } from './api'
+import { isLocked, machines as fetchMachines, upload, type Entry, type Machine } from './api'
 import { join, useRoute } from './route'
 import { useMedia, usePref } from './prefs'
 import { TopBar, type View } from './components/TopBar'
 import { Nav } from './components/Sidebar'
 import { Landing } from './components/Landing'
 import { SearchView } from './components/SearchView'
+import { Settings } from './components/Settings'
+import { Unlock } from './components/Unlock'
+import { OtpGate } from './components/Otp'
 import { Listing, Toolbar, sortEntries, useListing, type Selection, type Sort } from './components/Listing'
 import { Inspector } from './components/Inspector'
 import { QuickLook } from './components/QuickLook'
@@ -22,7 +25,8 @@ function useMachines() {
     const tick = () => fetchMachines().then(m => { if (live) { setList(m); setError(undefined) } }).catch(e => live && setError(e.message))
     tick()
     const id = setInterval(tick, 15000)
-    return () => { live = false; clearInterval(id) }
+    addEventListener('rfs:machines', tick)
+    return () => { live = false; clearInterval(id); removeEventListener('rfs:machines', tick) }
   }, [])
   return { list, error }
 }
@@ -38,6 +42,8 @@ export default function App() {
   const [sidebar, setSidebar] = usePref<boolean>('sidebar', true)
   const [details, setDetails] = usePref<boolean>('details', true)
   const [drawer, setDrawer] = useState(false)
+  const [otpGate, setOtpGate] = useState(false)
+  useEffect(() => { const f = () => setOtpGate(true); addEventListener('rfs:otp', f); return () => removeEventListener('rfs:otp', f) }, [])
   const cur = route.machine ? list.find(m => m.name === route.machine) : undefined
   useEffect(() => { setDrawer(false) }, [route.machine, route.path])
 
@@ -63,7 +69,7 @@ export default function App() {
   return (
     <div className="h-dvh flex flex-col">
       <TopBar machines={list} machine={route.machine} path={route.path} view={view} onView={setView} hidden={hidden} onHidden={setHidden}
-        sidebar={wide ? sidebar : drawer} onSidebar={toggleSidebar} details={details} onDetails={() => setDetails(!details)} />
+        sidebar={wide ? sidebar : drawer} onSidebar={toggleSidebar} details={details} onDetails={() => setDetails(!details)} settings={'settings' in route && !!route.settings} />
       <div className="flex-1 min-h-0 flex">
         {wide && sidebar && (
           <aside className="w-64 shrink-0 border-r border-line overflow-auto bg-surface animate-drawer">
@@ -72,13 +78,18 @@ export default function App() {
         )}
         <main className="vt-main flex-1 min-w-0 min-h-0 flex">
           {route.machine
-            ? <Browser key={route.machine + route.path} machine={route.machine} path={route.path} preselect={route.select} hidden={hidden} view={view} offline={cur ? !cur.agent : false} wide={wide} details={details} onDetails={setDetails} />
+            ? isLocked(cur)
+              ? <Unlock key={'lock:' + cur!.name} machine={cur!} />
+              : <Browser key={route.machine + route.path} machine={route.machine} path={route.path} preselect={route.select} hidden={hidden} view={view} offline={cur ? !cur.agent : false} wide={wide} details={details} onDetails={setDetails} />
             : 'q' in route && route.q !== undefined
-              ? <SearchView key={route.q} q={route.q} />
-              : <div className="flex-1 overflow-auto"><Landing machines={list} error={error} /></div>}
+              ? <SearchView key={route.q} q={route.q} machines={list} />
+              : 'settings' in route && route.settings
+                ? <Settings machines={list} />
+                : <div className="flex-1 overflow-auto"><Landing machines={list} error={error} /></div>}
         </main>
       </div>
       <Tray />
+      {otpGate && <OtpGate onDone={() => location.reload()} />}
       {!wide && (
         <Overlay open={drawer} onClose={() => setDrawer(false)} side="left" label="Machines">
           <Nav machines={list} machine={route.machine} path={route.path} onPick={() => setDrawer(false)} />
@@ -121,7 +132,7 @@ function Browser({ machine, path, preselect, hidden, view, offline, wide, detail
   }
 
   const err = offline ? `${machine} is not answering. It may be offline or the agent stopped.` : error
-  const panel = <Inspector machine={machine} path={path} selected={selected} count={sorted.length} onChanged={refresh} onClose={clear} />
+  const panel = <Inspector machine={machine} path={path} selected={selected} count={sorted.length} onChanged={refresh} onClose={clear} onOpen={quickLook} />
   const showPane = wide && details
   return (
     <>

@@ -15,15 +15,17 @@ export function QuickLook({ machine, dir, files, index, onIndex, onClose }: { ma
   useEffect(() => { // attach once; read the latest props through the ref so re-renders never drop keys
     const prev = document.activeElement as HTMLElement | null
     box.current?.focus()
+    const opened = performance.now()
     const onKey = (ev: KeyboardEvent) => {
+      if (ev.timeStamp <= opened) return // the keypress that opened us is still bubbling
       const { index, files, onIndex, onClose } = latest.current
       if (ev.key === 'Escape' || ev.key === ' ') { ev.preventDefault(); onClose() }
       else if (ev.key === 'ArrowRight') onIndex(Math.min(files.length - 1, index + 1))
       else if (ev.key === 'ArrowLeft') onIndex(Math.max(0, index - 1))
     }
-    const id = setTimeout(() => document.addEventListener('keydown', onKey), 0) // skip the keypress that opened us
+    document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
-    return () => { clearTimeout(id); document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; prev?.focus() }
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = ''; prev?.focus() }
   }, [])
   if (!e) return null
   const full = join(dir, e.n)

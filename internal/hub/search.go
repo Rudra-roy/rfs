@@ -13,7 +13,7 @@ import (
 // Search fans a filename query out to every drive of every agent and streams the
 // merged hits as NDJSON, each tagged with the machine. Ends with a {"done"} line
 // per drive so the UI can show what was and was not fully covered.
-func Search(reg *Registry, agentPort string) http.Handler {
+func Search(reg *Registry, agentPort string, unlocks *Unlocks) http.Handler {
 	client := &http.Client{Timeout: 15 * time.Second}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query().Get("q")
@@ -36,8 +36,20 @@ func Search(reg *Registry, agentPort string) http.Handler {
 		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
 		defer cancel()
 		var wg sync.WaitGroup
+		email := Email(r)
 		for _, m := range reg.List() {
 			if !m.Agent {
+				continue
+			}
+			tok := ""
+			if unlocks != nil {
+				tok = unlocks.Token(email, m.Name)
+			}
+			if m.Locked && tok == "" { // not unlocked by this user: report, do not ask
+				for _, d := range m.Mounts {
+					b, _ := json.Marshal(map[string]any{"machine": m.Name, "root": d.Path, "done": false, "locked": true})
+					emit(b)
+				}
 				continue
 			}
 			for _, d := range m.Mounts {
@@ -46,6 +58,9 @@ func Search(reg *Registry, agentPort string) http.Handler {
 					defer wg.Done()
 					u := "http://" + m.Addr(agentPort) + "/v1/search?" + url.Values{"q": {q}, "path": {root}, "limit": {"100"}, "budget": {"4000"}}.Encode()
 					req, _ := http.NewRequestWithContext(ctx, "GET", u, nil)
+					if tok != "" {
+						req.Header.Set("X-Rfs-Token", tok)
+					}
 					resp, err := client.Do(req)
 					tail := map[string]any{"machine": m.Name, "root": root, "done": false}
 					if err != nil {
@@ -64,6 +79,7 @@ func Search(reg *Registry, agentPort string) http.Handler {
 						}
 						if _, isTail := obj["done"]; isTail {
 							tail["done"] = obj["done"]
+							tail["indexed"] = obj["indexed"] == true
 							continue
 						}
 						obj["machine"] = m.Name
