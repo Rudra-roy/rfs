@@ -18,4 +18,10 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: stable }
       - run: go vet ./... && go test ./...
-      - run: go build ./cmd/hub && go build ./cmd/agent && GOOS=windows go build -o /dev/null ./cmd/agent
+      - name: cross-build every release target
+        run: |
+          set -e
+          for t in linux/amd64 linux/arm64 linux/arm windows/amd64 darwin/arm64 darwin/amd64; do
+            CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} GOARM=6 go build -o /dev/null ./cmd/agent
+          done
+          go build -o /dev/null ./cmd/hub
