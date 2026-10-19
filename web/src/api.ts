@@ -30,6 +30,12 @@ export const otp = {
   verify: (code: string) => post('/api/otp/verify', { code }),
   disable: (code: string) => post('/api/otp/disable', { code }),
 }
+// Ends the session: the hub re-locks machines and forgets this device's 2FA, then Access clears its cookie.
+export async function logout() {
+  const { next } = await post('/api/logout').then(r => r.json())
+  for (const k of Object.keys(localStorage)) if (k.startsWith('rfs.recent') || k.startsWith('rfs.pinned')) localStorage.removeItem(k)
+  location.assign(next)
+}
 export const setAlias = (name: string, alias: string) =>
   fetch(`/api/machines/${encodeURIComponent(name)}/alias`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ alias }) })
     .then(check).then(() => dispatchEvent(new Event('rfs:machines')))

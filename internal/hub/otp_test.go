@@ -141,3 +141,31 @@ func TestUnlockFlow(t *testing.T) {
 		t.Fatalf("after lock: %d", c)
 	}
 }
+
+func TestLogoutRevokes(t *testing.T) {
+	var locked []string
+	agentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/lock" {
+			locked = append(locked, r.Header.Get("X-Rfs-Token"))
+		}
+		w.WriteHeader(204)
+	}))
+	defer agentSrv.Close()
+	host := strings.TrimPrefix(agentSrv.URL, "http://")
+	ip, port := host[:strings.LastIndex(host, ":")], host[strings.LastIndex(host, ":")+1:]
+	reg := NewDemoRegistry([]Machine{{Name: "alpha", IP: ip, Port: port, Agent: true}, {Name: "beta", IP: ip, Port: port, Agent: true}}, port)
+	u := NewUnlocks()
+	u.set("me@example.com", "alpha", "A", time.Hour)
+	u.set("me@example.com", "beta", "B", time.Hour)
+	u.set("other@example.com", "alpha", "O", time.Hour)
+	u.Logout(reg, port, "me@example.com")
+	if u.Token("me@example.com", "alpha") != "" || u.Token("me@example.com", "beta") != "" {
+		t.Fatal("tokens survive logout")
+	}
+	if u.Token("other@example.com", "alpha") != "O" {
+		t.Fatal("another user's token was revoked")
+	}
+	if len(locked) != 2 {
+		t.Fatalf("agents told to revoke %d tokens, want 2", len(locked))
+	}
+}

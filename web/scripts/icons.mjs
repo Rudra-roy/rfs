@@ -12,6 +12,12 @@ const icon = async (px, out) => {
 }
 await icon(180, 'apple-touch-icon.png')
 await icon(512, 'icon-512.png')
+await icon(192, 'icon-192.png')
+// maskable: launchers crop to a circle or squircle, so the mark sits inside the central 70% on a full-bleed plate
+const mask = await b.newPage({ viewport: { width: 512, height: 512 } })
+await mask.setContent(`<body style="margin:0;width:512px;height:512px;display:grid;place-items:center;background:#0f1821">${svg.replace('width="64" height="64"', 'width="358" height="358"')}</body>`)
+await mask.screenshot({ path: new URL('../public/icon-maskable-512.png', import.meta.url).pathname })
+await mask.close()
 const og = await b.newPage({ viewport: { width: 1200, height: 630 } })
 await og.setContent(`<!doctype html><html><head><style>
   @font-face{font-family:Plex;src:url(file://${process.cwd()}/node_modules/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-600-normal.woff2) format('woff2');font-weight:600}

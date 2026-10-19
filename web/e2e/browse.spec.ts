@@ -220,6 +220,65 @@ test('gear toggles security settings and returns to the previous page', async ({
   await expect(page).toHaveURL('/')
 })
 
+test('installable web app: manifest, service worker, install prompt', async ({ page, request, browser }) => {
+  const res = await request.get('/manifest.webmanifest')
+  expect(res.headers()['content-type']).toContain('application/manifest+json')
+  const mf = await res.json()
+  expect(mf.display).toBe('standalone')
+  const sizes = mf.icons.map((i: { sizes: string; purpose?: string }) => i.sizes + ':' + (i.purpose ?? 'any'))
+  expect(sizes).toEqual(expect.arrayContaining(['192x192:any', '512x512:any', '512x512:maskable']))
+  for (const i of mf.icons) expect((await request.get(i.src)).ok()).toBe(true)
+  expect((await request.get('/sw.js')).headers()['cache-control']).toBe('no-cache')
+  await page.goto('/')
+  await expect(page.locator('link[rel=manifest]')).toHaveAttribute('crossorigin', 'use-credentials')
+  await expect.poll(() => page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration())?.active), { timeout: 10000 }).toBe(true)
+
+  // Android-style: the browser fires beforeinstallprompt; our button calls prompt()
+  const android = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const a = await android.newPage()
+  await a.goto('/')
+  await a.evaluate(() => {
+    const e = new Event('beforeinstallprompt') as Event & Record<string, unknown>
+    e.prompt = () => { (window as unknown as Record<string, boolean>).__prompted = true; return Promise.resolve() }
+    e.userChoice = Promise.resolve({ outcome: 'accepted' })
+    dispatchEvent(e)
+  })
+  const strip = a.getByRole('region', { name: 'Install the app' })
+  await expect(strip).toBeVisible()
+  await shot(a, '10-install-android')
+  await strip.getByRole('button', { name: 'Install' }).click()
+  await expect.poll(() => a.evaluate(() => (window as unknown as Record<string, boolean>).__prompted)).toBe(true)
+  await expect(strip).toHaveCount(0)
+  await android.close()
+
+  // iOS-style: no event; instructions, and "Not now" snoozes it
+  const ios = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' })
+  const i = await ios.newPage()
+  await i.goto('/')
+  const hint = i.getByRole('region', { name: 'Install the app' })
+  await expect(hint).toContainText('Add to Home Screen')
+  await shot(i, '11-install-ios')
+  await hint.getByRole('button', { name: 'Not now' }).click()
+  await expect(hint).toHaveCount(0)
+  await i.reload()
+  await expect(i.getByRole('heading', { name: 'Rack' })).toBeVisible()
+  await expect(hint).toHaveCount(0)
+  await ios.close()
+})
+
+test('account menu shows the user and signs out', async ({ page, context }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Account/ }).click()
+  await expect(page.getByRole('menu')).toContainText('hironmoy5458@gmail.com')
+  await context.addCookies([{ name: 'rfs_otp', value: 'x', url: 'http://127.0.0.1:7430' }])
+  const done = page.waitForResponse(r => r.url().endsWith('/api/logout'))
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
+  expect((await done).status()).toBe(200)
+  await expect(page).toHaveURL('/') // dev hub has no Access; production goes to /cdn-cgi/access/logout
+  expect((await context.cookies()).find(c => c.name === 'rfs_otp')).toBeUndefined()
+})
+
 test('two-step verification: enrol, gate, verify, disable', async ({ page, context }) => {
   await page.goto('/settings')
   await expect(page.getByRole('heading', { name: 'Security' })).toBeVisible()

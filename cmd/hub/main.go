@@ -81,6 +81,16 @@ func main() {
 	api.Handle("GET /api/search", hub.Search(reg, *agentPort, unlocks))
 	api.Handle("/api/m/{name}/{rest...}", hub.Proxy(reg, *agentPort, unlocks))
 	otp.Routes(api, "rfs")
+	api.HandleFunc("POST /api/logout", func(w http.ResponseWriter, r *http.Request) {
+		unlocks.Logout(reg, *agentPort, hub.Email(r))
+		otp.Forget(w)
+		next := "/cdn-cgi/access/logout" // Cloudflare Access clears its session cookie here
+		if *devEmail != "" {
+			next = "/" // no Access in dev
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"next": next})
+	})
 	api.Handle("/", spa())
 
 	mux := http.NewServeMux()
@@ -99,8 +109,14 @@ func spa() http.Handler {
 		if p != "" {
 			if f, err := dist.Open(p); err == nil {
 				f.Close()
-				if strings.HasPrefix(p, "assets/") {
+				switch {
+				case strings.HasPrefix(p, "assets/"):
 					w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+				case p == "sw.js" || p == "manifest.webmanifest" || p == "offline.html":
+					w.Header().Set("Cache-Control", "no-cache") // installed apps must see updates
+				}
+				if p == "manifest.webmanifest" {
+					w.Header().Set("Content-Type", "application/manifest+json")
 				}
 				files.ServeHTTP(w, r)
 				return

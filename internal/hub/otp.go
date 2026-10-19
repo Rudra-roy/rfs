@@ -122,6 +122,11 @@ func (o *OTP) setCookie(w http.ResponseWriter, r *http.Request, email string) {
 		HttpOnly: true, Secure: r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" || r.Header.Get("Cf-Visitor") != "", SameSite: http.SameSiteLaxMode})
 }
 
+// Forget clears this device's second-factor cookie.
+func (o *OTP) Forget(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{Name: otpCookie, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+}
+
 // Verified reports whether this request's device has passed the second factor
 // (or no second factor is enrolled).
 func (o *OTP) Verified(r *http.Request) bool {

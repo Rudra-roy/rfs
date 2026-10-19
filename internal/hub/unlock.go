@@ -104,3 +104,27 @@ func (u *Unlocks) Handler(reg *Registry, agentPort string) http.Handler {
 		w.WriteHeader(http.StatusNoContent)
 	})
 }
+
+// Logout revokes every machine token this user holds, at the agents too, so a
+// stolen token is useless after sign-out.
+func (u *Unlocks) Logout(reg *Registry, agentPort, email string) {
+	u.mu.Lock()
+	held := map[string]string{}
+	for k, e := range u.m {
+		if who, machine, ok := strings.Cut(k, "\x00"); ok && who == email {
+			held[machine] = e.token
+			delete(u.m, k)
+		}
+	}
+	u.mu.Unlock()
+	client := &http.Client{Timeout: 3 * time.Second}
+	for machine, tok := range held {
+		if m, ok := reg.Lookup(machine); ok && m.Agent {
+			req, _ := http.NewRequest("POST", "http://"+m.Addr(agentPort)+"/v1/lock", nil)
+			req.Header.Set("X-Rfs-Token", tok)
+			if resp, err := client.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		}
+	}
+}

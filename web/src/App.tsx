@@ -10,6 +10,7 @@ import { SearchView } from './components/SearchView'
 import { Settings } from './components/Settings'
 import { Unlock } from './components/Unlock'
 import { OtpGate } from './components/Otp'
+import { InstallPrompt } from './components/InstallPrompt'
 import { Listing, Toolbar, sortEntries, useListing, type Selection, type Sort } from './components/Listing'
 import { Inspector } from './components/Inspector'
 import { QuickLook } from './components/QuickLook'
@@ -70,6 +71,7 @@ export default function App() {
     <div className="h-dvh flex flex-col">
       <TopBar machines={list} machine={route.machine} path={route.path} view={view} onView={setView} hidden={hidden} onHidden={setHidden}
         sidebar={wide ? sidebar : drawer} onSidebar={toggleSidebar} details={details} onDetails={() => setDetails(!details)} settings={'settings' in route && !!route.settings} />
+      <InstallPrompt />
       <div className="flex-1 min-h-0 flex">
         {wide && sidebar && (
           <aside className="w-64 shrink-0 border-r border-line overflow-auto bg-surface animate-drawer">

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, ChevronRight, Eye, EyeOff, HardDrive, LayoutGrid, List, Lock, LockOpen, PanelLeft, PanelRight, Pencil, Pin, Settings as SettingsIcon } from 'lucide-react'
 import { Mark } from './Mark'
+import { Account } from './Account'
 import { isLocked, label, lock, type Machine } from '../api'
 import { crumbs, navigate, toggleSettings } from '../route'
 import { useBusy } from '../transfers'
@@ -45,6 +46,7 @@ export function TopBar({ machines, machine, path, view, onView, hidden, onHidden
           </div>
           {cur && <IconButton label={details ? 'Hide details' : 'Show details'} active={details} onClick={onDetails} className="hidden lg:grid"><PanelRight /></IconButton>}
           <IconButton label={settings ? 'Close security settings' : 'Security settings'} active={settings} onClick={() => toggleSettings(!!settings)}><SettingsIcon /></IconButton>
+          <Account />
         </div>
       </div>
       {!wide && cur && !isLocked(cur) && <div className="h-10 flex items-center px-2 border-t border-line/60"><Crumbs machine={cur} path={path} mount={mount?.path} /></div>}
